@@ -827,9 +827,9 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         pdf.cell(38, 5, clean_text(mins_to_duration_str(t_proy_g)), border=1, align='C')
         pdf.cell(38, 5, clean_text(mins_to_duration_str(t_desc_g)), border=1, align='C', ln=True); pdf.ln(4)
 
-        # Análisis Visual
+        # Análisis de Fallas y Tendencias Visual (GRÁFICOS DE LÍNEAS Y BARRAS ÚNICAMENTE)
         check_space(pdf, 170)
-        print_section_title(pdf, "Análisis de Fallas y Visual", theme_color)
+        print_section_title(pdf, "Análisis de Fallas y Tendencias", theme_color)
 
         df_g_fallas = df_pdf_g[df_pdf_g['Estado_Global'] == 'Falla/Gestión'].copy()
         if not df_g_fallas.empty:
@@ -857,29 +857,6 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 fig_top15.write_image(tmp_c.name); pdf.image(tmp_c.name, x=5, y=y_bg, w=105)
                 fig_t.write_image(tmp_t.name); pdf.image(tmp_t.name, x=110, y=y_bg, w=90)
             pdf.set_y(y_bg + 60); pdf.ln(2)
-
-        # Tortas de Estructura Visual
-        res_g = df_pdf_g.groupby('Estado_Global')['Tiempo (Min)'].sum().reset_index() if not df_pdf_g.empty else pd.DataFrame()
-        if res_g['Tiempo (Min)'].sum() > 0:
-            y_base = pdf.get_y()
-            fig_g = px.pie(res_g, values='Tiempo (Min)', names='Estado_Global', hole=0.4, title="Tiempos (Hs)", color_discrete_sequence=pie_colors)
-            fig_g.update_traces(textinfo='percent+label', textposition='outside', textfont_size=11)
-            fig_g.update_layout(width=420, height=300, margin=dict(t=40, b=50, l=80, r=80), showlegend=False, plot_bgcolor='rgba(0,0,0,0)')
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp1:
-                fig_g.write_image(tmp1.name)
-            
-            df_fallas = df_pdf_g[df_pdf_g['Estado_Global'] == 'Falla/Gestión']
-            if not df_fallas.empty and df_fallas['Tiempo (Min)'].sum() > 0:
-                res_f = df_fallas.groupby('Categoria_Macro')['Tiempo (Min)'].sum().reset_index()
-                fig_p = px.pie(res_f, values='Tiempo (Min)', names='Categoria_Macro', hole=0.4, title="Fallas (Hs)", color_discrete_sequence=pie_colors)
-                fig_p.update_traces(textinfo='percent+label', textposition='outside', textfont_size=11)
-                fig_p.update_layout(width=420, height=300, margin=dict(t=40, b=50, l=80, r=80), showlegend=False, plot_bgcolor='rgba(0,0,0,0)')
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp2:
-                    fig_p.write_image(tmp2.name)
-                    pdf.image(tmp1.name, x=5, y=y_base, w=100); pdf.image(tmp2.name, x=105, y=y_base, w=100)
-            else:
-                pdf.image(tmp1.name, x=55, y=y_base, w=100)
-            pdf.set_y(y_base + 75); pdf.ln(2)
 
         # Cuadro Maquinas (Resumen Detallado)
         maquinas_con_tiempo = []
