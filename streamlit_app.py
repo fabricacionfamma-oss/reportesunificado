@@ -1062,16 +1062,10 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
             pdf.set_font("Arial", 'I', 10); pdf.cell(0, 10, clean_text("No hay registros de fallas para desglosar por área."), ln=True)
         # ------------------------------------------
 
-        # Producción (Gráfico y Tabla Top 5 Códigos)
+        # Producción (Solo Tabla Top 5 Códigos)
         df_prod_g = df_prod_pdf[df_prod_pdf['Máquina'].isin(maq_del_grupo)]
         if not df_prod_g.empty:
-            check_space(pdf, 75); print_section_title(pdf, "Desglose de Producción", theme_color)
-            prod_m = df_prod_g.groupby('Máquina')[['Buenas', 'Retrabajo', 'Observadas']].sum().reset_index()
-            fig_p = px.bar(prod_m, x='Máquina', y=['Buenas', 'Retrabajo', 'Observadas'], barmode='stack', color_discrete_sequence=chart_bars, text_auto=True)
-            fig_p.update_layout(width=800, height=220, margin=dict(t=15, b=25, l=20, r=20))
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp3:
-                fig_p.write_image(tmp3.name); add_image_safe(pdf, tmp3.name, w_mm=155, h_mm=45)
-            pdf.ln(2)
+            check_space(pdf, 30); print_section_title(pdf, "Desglose de Producción", theme_color)
 
             def dibujar_cabeza_prod():
                 setup_table_header(pdf, theme_color)
