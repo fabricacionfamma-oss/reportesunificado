@@ -13,17 +13,12 @@ from datetime import timedelta
 # 0. MAPEOS Y GRUPOS UNIFICADOS (FUMISCOR + FAMMA)
 # ==========================================
 MAQUINAS_MAP = {
-    # ==========================================
     # 🟦 1. ÁREA: ESTAMPADO (FAMMA + FUMISCOR)
-    # ==========================================
-    # -- FAMMA (Estampado) --
     "LINEA 1.5": "LÍNEAS ESTAMPADO FAMMA",
     "LINEA 2": "LÍNEAS ESTAMPADO FAMMA",
     "LINEA 3": "LÍNEAS ESTAMPADO FAMMA",
     "LINEA 4": "LÍNEAS ESTAMPADO FAMMA",
-    "GENERAL": "LÍNEAS ESTAMPADO FAMMA", # Por históricos
-
-    # -- FUMISCOR (Estampado) --
+    "GENERAL": "LÍNEAS ESTAMPADO FAMMA", 
     "P-023": "PRENSAS PROGRESIVAS", "P-024": "PRENSAS PROGRESIVAS", "P-025": "PRENSAS PROGRESIVAS", "P-026": "PRENSAS PROGRESIVAS",
     "P-027": "PRENSAS PROGRESIVAS GRANDES", "P-028": "PRENSAS PROGRESIVAS GRANDES", "P-029": "PRENSAS PROGRESIVAS GRANDES", "P-030": "PRENSAS PROGRESIVAS GRANDES",
     "BAL-002": "BALANCIN", "BAL-003": "BALANCIN", "BAL-005": "BALANCIN", "BAL-006": "BALANCIN", "BAL-007": "BALANCIN", "BAL-008": "BALANCIN", "BAL-009": "BALANCIN", "BAL-010": "BALANCIN", 
@@ -32,30 +27,16 @@ MAQUINAS_MAP = {
     "P-015": "MECANICAS", "P-019": "MECANICAS", "P-020": "MECANICAS", "P-021": "MECANICAS", "P-022": "MECANICAS",
     "GOF01": "Gofradora",
 
-    # ==========================================
     # 🟧 2. ÁREA: SOLDADURA NUEVA (FAMMA + RENAULT FUMISCOR)
-    # ==========================================
-    # -- FAMMA (Celdas y PRP) --
-    "Cell 13 Famma": "CELDAS FAMMA",
-    "Cell 14 Famma": "CELDAS FAMMA",
-    "Cell 15A Famma": "CELDAS FAMMA",
-    "Cell 15B Famma": "CELDAS FAMMA",
-    "Cell 16 Famma": "CELDAS FAMMA",
-    "Cell 17 Famma": "CELDAS FAMMA",
-    "Cell 3 Famma": "CELDAS FAMMA",
-    "PRP 1": "PRP FAMMA",
-    "PRP 2": "PRP FAMMA",
-    "PRP 3": "PRP FAMMA",
-
-    # -- FUMISCOR (Soldadura Nueva Renault) --
+    "Cell 13 Famma": "CELDAS FAMMA", "Cell 14 Famma": "CELDAS FAMMA", "Cell 15A Famma": "CELDAS FAMMA", "Cell 15B Famma": "CELDAS FAMMA",
+    "Cell 16 Famma": "CELDAS FAMMA", "Cell 17 Famma": "CELDAS FAMMA", "Cell 3 Famma": "CELDAS FAMMA",
+    "PRP 1": "PRP FAMMA", "PRP 2": "PRP FAMMA", "PRP 3": "PRP FAMMA",
     "Celda 01 Fumis": "CELDA RENAULT", "Celda 02 Fumis": "CELDA RENAULT", "Celda 03 Fumis": "CELDA RENAULT", "Celda 04 Fumis": "CELDA RENAULT",
     "Celda 05 Fumis": "CELDA RENAULT", "Celda 06 Fumis": "CELDA RENAULT", "Celda 07 Fumis": "CELDA RENAULT", "Celda 08 Fumis": "CELDA RENAULT",
     "Celda 09 Fumis": "CELDA RENAULT", "Celda 10 Fumis": "CELDA RENAULT", "Celda 11 Fumis": "CELDA RENAULT", "Celda 12 Fumis": "CELDA RENAULT",
     "Celda 13 Fumis": "CELDA RENAULT", "Celda 14 Fumis": "CELDA RENAULT", "Celda 15 Fumis": "CELDA RENAULT",
 
-    # ==========================================
     # 🟪 3. ÁREA: SOLDADURA FUMIS (PRP, CELDAS FUMIS, DOBLADORAS)
-    # ==========================================
     "SOP-003": "PRP FUMIS", "SOP-005": "PRP FUMIS", "SOP-008": "PRP FUMIS", "SOP-009": "PRP FUMIS", "SOP-010": "PRP FUMIS",
     "SOP-017": "PRP FUMIS", "SOP-018": "PRP FUMIS", "SOP-019": "PRP FUMIS", "SOP-020": "PRP FUMIS", "SOP-022": "PRP FUMIS",
     "SOP-023": "PRP FUMIS", "SOP-024": "PRP FUMIS", "SOP-025": "PRP FUMIS", "SOP-026": "PRP FUMIS", "SOP-027": "PRP FUMIS", 
@@ -72,7 +53,6 @@ def asignar_grupo_dinamico(maq):
     maq_u = str(maq).strip().upper()
     for key in MAQUINAS_MAP.keys():
         if str(key).upper() == maq_u: return MAQUINAS_MAP[key]
-    
     if 'CELL' in maq_u or 'CELDA' in maq_u: return 'CELDAS FAMMA'
     if 'LINEA' in maq_u or 'LÍNEA' in maq_u: return 'LÍNEAS ESTAMPADO FAMMA'
     if 'PRP' in maq_u or 'SOLD' in maq_u: return 'PRP FAMMA'
@@ -86,6 +66,15 @@ def asignar_area_principal(grupo):
     elif grupo in ['PRP FUMIS', 'DOBLADORA', 'CELDA SOLDADURA FUMIS']:
         return 'SOLDADURA FUMIS'
     return 'OTRO'
+
+def unificar_fabrica(f):
+    f_str = str(f).strip().upper()
+    if f_str == '4': return 'Planta 4 (Fumiscor)'
+    if f_str == '1': return 'Planta 1 (Fumiscor)'
+    if f_str == 'SOL': return 'Soldadura (FAMMA)'
+    if f_str == 'EST': return 'Estampado (FAMMA)'
+    if f_str == 'MEC': return 'Mecanizado (FAMMA)'
+    return str(f).title() if str(f) != 'nan' else '-'
 
 # ==========================================
 # 1. CONFIGURACIÓN Y ESTILOS
@@ -121,8 +110,7 @@ def get_piezas_h():
         df_h = pd.read_csv(url, header=None)
         piezas = df_h.iloc[:, 0].dropna().astype(str).str.strip().tolist()
         return [p for p in piezas if p and p.lower() not in ['codigo', 'código', 'pieza', 'piezas']]
-    except Exception as e:
-        st.error(f"Error al cargar piezas H: {e}")
+    except Exception:
         return []
 
 # ==========================================
@@ -145,7 +133,6 @@ def fix_percentages(df):
 @st.cache_data(ttl=300)
 def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, lista_piezas_h=None):
     try:
-        # CONEXIÓN A AMBAS BASES DE DATOS
         conn_famma = st.connection("famma", type="sql")
         conn_fumiscor = st.connection("fumiscor", type="sql")
         
@@ -165,15 +152,12 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
                 df_piezas_excluidas = pd.concat([run_query_safe(conn_famma, q_exc), run_query_safe(conn_fumiscor, q_exc)], ignore_index=True)
 
             q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas FROM PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Month = {mes} AND p.Year = {anio} {prod_where} GROUP BY c.Name, pr.Code"
-            
             tb_prod = "PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId" if lista_piezas_h else "PROD_M_03 p JOIN CELL c ON p.CellId = c.CellId"
             
             q_metrics = f"SELECT c.Name as Máquina, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, SUM(p.ProductiveTime) as T_Operativo, SUM(p.DownTime) as T_Parada, (SUM(p.Performance * p.ProductiveTime) / NULLIF(SUM(p.ProductiveTime), 0)) as PERFORMANCE, (SUM(p.Availability * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as DISPONIBILIDAD, (SUM(p.Quality * (p.Good + p.Rework + p.Scrap)) / NULLIF(SUM(p.Good + p.Rework + p.Scrap), 0)) as CALIDAD, (SUM(p.Oee * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as OEE FROM {tb_prod} WHERE p.Month = {mes} AND p.Year = {anio} {prod_where} GROUP BY c.Name"
-
             q_metrics_std = f"SELECT c.Name as Máquina, (SUM(p.Performance * p.ProductiveTime) / NULLIF(SUM(p.ProductiveTime), 0)) as PERFORMANCE, (SUM(p.Availability * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as DISPONIBILIDAD, (SUM(p.Quality * (p.Good + p.Rework + p.Scrap)) / NULLIF(SUM(p.Good + p.Rework + p.Scrap), 0)) as CALIDAD, (SUM(p.Oee * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as OEE, SUM(p.ProductiveTime) as T_Operativo, SUM(p.DownTime) as T_Parada, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas FROM PROD_M_03 p JOIN CELL c ON p.CellId = c.CellId WHERE p.Month = {mes} AND p.Year = {anio} GROUP BY c.Name"
             
             q_op = f"SELECT DISTINCT op.Name as Operador, p.Factory as Fábrica, (SUM(p.Performance * p.ProductiveTime) OVER(PARTITION BY p.OperatorId) / NULLIF(SUM(p.ProductiveTime) OVER(PARTITION BY p.OperatorId), 0)) as PERFORMANCE FROM OPER_M_01 p JOIN OPERATOR op ON p.OperatorId = op.OperatorId WHERE p.Month = {mes} AND p.Year = {anio}"
-            
             q_trend = f"SELECT p.Month, c.Name as Máquina, SUM(p.Oee * (p.ProductiveTime + p.DownTime)) as OEE_Num, SUM(p.ProductiveTime + p.DownTime) as OEE_Den, (SUM(p.Oee * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as OEE, SUM(p.Availability * (p.ProductiveTime + p.DownTime)) as Disp_Num, SUM(p.Performance * p.ProductiveTime) as Perf_Num, SUM(p.ProductiveTime) as T_Operativo, SUM(p.Quality * (p.Good + p.Rework + p.Scrap)) as Cal_Num, SUM(p.Good + p.Rework + p.Scrap) as Piezas_Totales FROM {tb_prod} WHERE p.Year = {anio} AND p.Month <= {mes} {prod_where} GROUP BY p.Month, c.Name"
             
             df_op_target = pd.concat([run_query_safe(conn_famma, q_op), run_query_safe(conn_fumiscor, q_op)], ignore_index=True)
@@ -185,11 +169,9 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
                 df_piezas_excluidas = pd.concat([run_query_safe(conn_famma, q_exc), run_query_safe(conn_fumiscor, q_exc)], ignore_index=True)
 
             q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas FROM PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' {prod_where} GROUP BY c.Name, pr.Code"
-            
             tb_prod = "PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId" if lista_piezas_h else "PROD_D_03 p JOIN CELL c ON p.CellId = c.CellId"
             
             q_metrics = f"SELECT c.Name as Máquina, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, SUM(p.ProductiveTime) as T_Operativo, SUM(p.DownTime) as T_Parada, (SUM(p.Performance * p.ProductiveTime) / NULLIF(SUM(p.ProductiveTime), 0)) as PERFORMANCE, (SUM(p.Availability * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as DISPONIBILIDAD, (SUM(p.Quality * (p.Good + p.Rework + p.Scrap)) / NULLIF(SUM(p.Good + p.Rework + p.Scrap), 0)) as CALIDAD, (SUM(p.Oee * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as OEE FROM {tb_prod} WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' {prod_where} GROUP BY c.Name"
-
             q_metrics_std = f"SELECT c.Name as Máquina, (SUM(p.Performance * p.ProductiveTime) / NULLIF(SUM(p.ProductiveTime), 0)) as PERFORMANCE, (SUM(p.Availability * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as DISPONIBILIDAD, (SUM(p.Quality * (p.Good + p.Rework + p.Scrap)) / NULLIF(SUM(p.Good + p.Rework + p.Scrap), 0)) as CALIDAD, (SUM(p.Oee * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as OEE, SUM(p.ProductiveTime) as T_Operativo, SUM(p.DownTime) as T_Parada, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas FROM PROD_D_03 p JOIN CELL c ON p.CellId = c.CellId WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' GROUP BY c.Name"
 
             q_op = f"SELECT op.Name as Operador, p.Factory as Fábrica, p.Performance, p.ProductiveTime FROM OPER_D_01 p JOIN OPERATOR op ON p.OperatorId = op.OperatorId WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}'"
@@ -199,7 +181,7 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
                 df_op_raw['Performance'] = pd.to_numeric(df_op_raw['Performance'], errors='coerce').fillna(0)
                 df_op_raw['ProductiveTime'] = pd.to_numeric(df_op_raw['ProductiveTime'], errors='coerce').fillna(0)
                 df_op_raw['Perf_Num'] = df_op_raw['Performance'] * df_op_raw['ProductiveTime']
-                df_op_raw['Fábrica'] = df_op_raw['Fábrica'].fillna('No Asignada')
+                df_op_raw['Fábrica'] = df_op_raw['Fábrica'].fillna('-')
                 df_op_target = df_op_raw.groupby(['Operador', 'Fábrica']).agg(Perf_Num=('Perf_Num', 'sum'), ProductiveTime=('ProductiveTime', 'sum')).reset_index()
                 df_op_target['PERFORMANCE'] = df_op_target['Perf_Num'] / df_op_target['ProductiveTime'].replace(0, 1)
             else:
@@ -220,16 +202,15 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
             FROM Tiempos_Turno t JOIN CELL c ON t.CellId = c.CellId JOIN TURN tu ON t.TurnId = tu.TurnId LEFT JOIN PROD_D_02 p ON t.CellId = p.CellId AND t.TurnId = p.TurnId AND t.Dia = p.Date GROUP BY c.Name, tu.Name, t.Dia
         """
         df_horarios = pd.concat([run_query_safe(conn_famma, q_horarios), run_query_safe(conn_fumiscor, q_horarios)], ignore_index=True)
-
         df_prod_target = pd.concat([run_query_safe(conn_famma, q_prod), run_query_safe(conn_fumiscor, q_prod)], ignore_index=True)
-        
         df_metrics = pd.concat([fix_percentages(run_query_safe(conn_famma, q_metrics)), fix_percentages(run_query_safe(conn_fumiscor, q_metrics))], ignore_index=True)
         df_metrics_std = pd.concat([fix_percentages(run_query_safe(conn_famma, q_metrics_std)), fix_percentages(run_query_safe(conn_fumiscor, q_metrics_std))], ignore_index=True)
 
         if not df_op_target.empty:
             df_op_target = df_op_target[~df_op_target['Operador'].str.lower().str.contains('usuario|admin', regex=True, na=False)]
+            df_op_target['Fábrica'] = df_op_target['Fábrica'].apply(unificar_fabrica)
 
-        # --- QUERIES DE EVENTOS (Separado para Famma y Fumiscor por estructura) ---
+        # --- QUERIES DE EVENTOS (Separado para Famma y Fumiscor) ---
         q_event_famma = f"""
             SELECT e.Id as Evento_Id, c.Name as Máquina, e.Started as Inicio, e.Finish as Fin, e.Interval as [Tiempo (Min)], 
                    t1.Name as [Nivel Evento 1], t2.Name as [Nivel Evento 2], t3.Name as [Nivel Evento 3], t4.Name as [Nivel Evento 4], 
@@ -288,6 +269,7 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
             df_raw['Operador_Celda'] = df_raw['Operador_Celda'].fillna('').astype(str)
             df_raw['Operador_Req'] = df_raw['Operador_Req'].fillna('').astype(str)
             df_raw['Operador_Resp'] = df_raw['Operador_Resp'].fillna('').astype(str)
+            df_raw['Fábrica'] = df_raw['Fábrica'].apply(unificar_fabrica)
 
             cols_grupo = [c for c in df_raw.columns if c not in ['Operador_Celda', 'Operador_Req', 'Operador_Resp']]
             def agrupar_nombres(ops): return ' / '.join([str(x).strip() for x in ops.unique() if pd.notna(x) and str(x).strip() != ''])
@@ -310,23 +292,13 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
                 if 'PARADA PROGRAMADA' in t: return 'Parada Programada'
                 return 'Falla/Gestión'
 
-            def clasificar_macro(row):
-                t = " ".join([str(row.get(c, '')) for c in cols_niveles]).upper()
-                cats = ["MANTENIMIENTO", "MATRICERIA", "DISPOSITIVOS", "TECNOLOGIA", "GESTION", "LOGISTICA", "CALIDAD", "FALLA"]
-                for cat in cats:
-                    if cat in t: return cat.capitalize()
-                return 'Otra Falla/Gestión'
-
             def obtener_detalle_final(row):
                 niveles = [str(row.get(c, '')) for c in cols_niveles]
                 validos = [n.strip() for n in niveles if n.strip() and n.strip().lower() not in ['none', 'nan', 'null']]
                 if not validos: return "Sin detalle en sistema"
-                if row.get('Estado_Global', '') == 'Falla/Gestión' and row.get('Categoria_Macro', '') != 'Otra Falla/Gestión':
-                    return f"[{row['Categoria_Macro'].upper()}] {validos[-1].upper()}"
                 return validos[-1]
 
             df_raw['Estado_Global'] = df_raw.apply(categorizar_estado, axis=1)
-            df_raw['Categoria_Macro'] = df_raw.apply(clasificar_macro, axis=1)
             df_raw['Detalle_Final'] = df_raw.apply(obtener_detalle_final, axis=1)
 
         return df_raw, df_prod_target, df_op_target, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas
@@ -386,7 +358,6 @@ with col_p2:
 with st.spinner("Extrayendo y unificando información..."):
     df_raw, pdf_df_prod_target, pdf_df_op_target, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas = fetch_data_from_db(pdf_ini, pdf_fin, pdf_tipo, mes=pdf_mes, anio=pdf_anio, lista_piezas_h=lista_piezas_h)
 
-# Asignar Area Principal a todas las tablas base
 if not df_metrics.empty:
     df_metrics['Grupo_Máquina'] = df_metrics['Máquina'].apply(asignar_grupo_dinamico)
     df_metrics['Area_Principal'] = df_metrics['Grupo_Máquina'].apply(asignar_area_principal)
@@ -468,12 +439,6 @@ def print_pdf_metric_row(pdf, prefix, m, m_std=None):
     pdf.set_text_color(0, 0, 0); pdf.write(7, clean_text("  |  Cal: "))
     set_pdf_color_metric(pdf, m.get('CALIDAD', 0)*100, 'CALIDAD'); pdf.write(7, f"{m.get('CALIDAD', 0)*100:.1f}%")
     pdf.set_text_color(0, 0, 0); pdf.ln(7)
-
-    if m_std is not None and m_std.get('OEE', 0) != m.get('OEE', 0):
-        pdf.set_font("Arial", 'I', 8); pdf.set_text_color(120, 120, 120)
-        pdf.cell(10)
-        pdf.write(5, clean_text(f"(Usual c/ Piezas H - OEE: {m_std.get('OEE', 0)*100:.1f}% | Disp: {m_std.get('DISPONIBILIDAD', 0)*100:.1f}% | Perf: {m_std.get('PERFORMANCE', 0)*100:.1f}% | Cal: {m_std.get('CALIDAD', 0)*100:.1f}%)"))
-        pdf.ln(5)
 
 def add_image_safe(pdf, img_path, w_mm, h_mm, center=True):
     if pdf.get_y() + h_mm > 275: pdf.add_page()
@@ -567,7 +532,6 @@ def crear_pdf_resumen_ejecutivo(fecha_str, df_trend, df_metrics_pdf, df_metrics_
         y_curr = draw_kpi_row(pdf, y_curr, f"INDICADORES: {area_name}", oee, disp, perf, cal, t_col, std_mets)
         y_curr += 8
 
-    # Gráfico de barras evolutivo por Área
     if not df_trend.empty:
         pdf.set_y(y_curr + 10)
         pdf.set_font("Arial", 'B', 12); pdf.set_text_color(*theme_color)
@@ -609,13 +573,13 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
     
     if area_req == "ESTAMPADO":
         theme_color = (15, 76, 129); comp_color = (52, 152, 219)  
-        chart_bars = ['#003366', '#3498DB', '#AED6F1']; pie_colors = px.colors.sequential.Blues_r
+        chart_bars = ['#003366', '#3498DB', '#AED6F1']
     elif area_req == "SOLDADURA NUEVA":
         theme_color = (211, 84, 0); comp_color = (230, 126, 34) 
-        chart_bars = ['#993300', '#E67E22', '#FAD7A1']; pie_colors = px.colors.sequential.Oranges_r
+        chart_bars = ['#993300', '#E67E22', '#FAD7A1']
     else: # SOLDADURA FUMIS
         theme_color = (142, 68, 173); comp_color = (165, 105, 189)
-        chart_bars = ['#5B2C6F', '#A569BD', '#D7BDE2']; pie_colors = px.colors.sequential.Purples_r
+        chart_bars = ['#5B2C6F', '#A569BD', '#D7BDE2']
         
     hex_theme = '#%02x%02x%02x' % theme_color; hex_comp = '#%02x%02x%02x' % comp_color  
 
@@ -723,7 +687,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         for maq, metrics in maquinas_metricas.items(): print_pdf_metric_row(pdf, f"    > {maq}", metrics, maquinas_metricas_std.get(maq))
         pdf.ln(3)
 
-        # 2. GRÁFICOS
+        # 2. GRÁFICOS OEE
         if p_tipo == "Mensual":
             print_section_title(pdf, "2. Evolución Histórica OEE por Máquina", theme_color)
             if not df_trend.empty:
@@ -785,7 +749,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                             d_data = grp[grp['Dia'].dt.weekday == day_idx]
                             pdf.cell(w_day, 5, d_data.iloc[0]['Rango'] if not d_data.empty else "", 1, 0 if day_idx < 4 else 1, 'C')
                         pdf.ln()
-                else: # Diario
+                else:
                     w_maq = 35; w_tur = 20; w_hor = 30; w_tie = 35
                     pdf.cell(w_maq, 6, "Maquina", 1, 0, 'C', True); pdf.cell(w_tur, 6, "Turno", 1, 0, 'C', True)
                     pdf.cell(w_hor, 6, "Hora Inicio", 1, 0, 'C', True); pdf.cell(w_hor, 6, "Hora Cierre", 1, 0, 'C', True)
@@ -799,8 +763,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                             pdf.cell(w_tie, 6, "Apertura Neta", 1, 0, 'C', True); pdf.cell(w_tie, 6, "No Registrado", 1, 1, 'C', True)
                             setup_table_row(pdf); pdf.set_font("Arial", '', 8)
                         pdf.cell(w_maq, 5, " " + clean_text(r_hor['Máquina']), 1, 0, 'L'); pdf.cell(w_tur, 5, clean_text(r_hor['Turno']), 1, 0, 'C')
-                        pdf.cell(w_hor, 5, clean_text(r_hor['Hora_Inicio']), 1, 0, 'C')
-                        pdf.cell(w_hor, 5, clean_text(r_hor['Hora_Cierre']), 1, 0, 'C')
+                        pdf.cell(w_hor, 5, clean_text(r_hor['Hora_Inicio']), 1, 0, 'C'); pdf.cell(w_hor, 5, clean_text(r_hor['Hora_Cierre']), 1, 0, 'C')
                         pdf.cell(w_tie, 5, mins_to_duration_str(r_hor.get('Apertura_Neta_Min', 0)), 1, 0, 'C')
                         pdf.cell(w_tie, 5, mins_to_duration_str(r_hor.get('No_Registrado_Min', 0)), 1, 1, 'C')
             else:
@@ -908,7 +871,9 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 pdf.set_xy(x_p, y_p + row_h); fill_t = not fill_t
             pdf.ln(5)
 
-        # Produccion
+        # ---------------------------------------------------------
+        # Producción (Gráfico y Tabla Top 5 Códigos)
+        # ---------------------------------------------------------
         df_prod_g = df_prod_pdf[df_prod_pdf['Máquina'].isin(maq_del_grupo)]
         if not df_prod_g.empty:
             check_space(pdf, 75); print_section_title(pdf, "Desglose de Producción", theme_color)
@@ -919,7 +884,39 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 fig_p.write_image(tmp3.name); add_image_safe(pdf, tmp3.name, w_mm=155, h_mm=45)
             pdf.ln(2)
 
-    # FINAL (Operarios y Baños)
+            def dibujar_cabeza_prod():
+                setup_table_header(pdf, theme_color)
+                pdf.set_font("Arial", 'B', 8)
+                pdf.cell(70, 5, "Codigo Producto", 1, 0, 'C', True)
+                pdf.cell(30, 5, "Buenas", 1, 0, 'C', True)
+                pdf.cell(30, 5, "Retrab.", 1, 0, 'C', True)
+                pdf.cell(30, 5, "Observ.", 1, 1, 'C', True)
+
+            maquinas_prod = sorted(df_prod_g['Máquina'].unique())
+            for maq_p in maquinas_prod:
+                df_m_prod = df_prod_g[df_prod_g['Máquina'] == maq_p].groupby('Código')[['Buenas', 'Retrabajo', 'Observadas']].sum().reset_index()
+                total_piezas = df_m_prod['Buenas'].sum() + df_m_prod['Retrabajo'].sum() + df_m_prod['Observadas'].sum()
+                
+                if total_piezas > 0:
+                    check_space(pdf, 45)
+                    pdf.set_font("Arial", 'B', 9); pdf.set_text_color(*theme_color)
+                    pdf.cell(0, 5, clean_text(f"Top 5 Códigos Producidos - {maq_p} (Total: {int(total_piezas)} pzs)"), ln=True)
+                    dibujar_cabeza_prod()
+                    setup_table_row(pdf); pdf.set_font("Arial", '', 8)
+                    
+                    top5_prod = df_m_prod.sort_values('Buenas', ascending=False).head(5)
+                    for _, row_prod in top5_prod.iterrows():
+                        if pdf.get_y() > 265:
+                            pdf.add_page(); dibujar_cabeza_prod(); setup_table_row(pdf); pdf.set_font("Arial", '', 8)
+                        pdf.cell(70, 4.5, " " + clean_text(str(row_prod['Código'])[:45]), 'B') 
+                        pdf.cell(30, 4.5, str(int(row_prod['Buenas'])), 'B', 0, 'C')
+                        pdf.cell(30, 4.5, str(int(row_prod['Retrabajo'])), 'B', 0, 'C')
+                        pdf.cell(30, 4.5, str(int(row_prod['Observadas'])), 'B', 1, 'C')
+                    pdf.ln(3)
+
+    # =========================================================================
+    # SECCIÓN FINAL OPERARIOS Y TIEMPOS DE DESCANSO
+    # =========================================================================
     check_space(pdf, 45)
     pdf.set_link(link_perfo); pdf.set_font("Times", 'B', 16); pdf.set_text_color(*theme_color)
     pdf.cell(0, 10, clean_text(f"SECCIÓN FINAL: PERFORMANCE Y TIEMPOS"), ln=True, align='L', border='B'); pdf.ln(5)
@@ -955,7 +952,15 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                     pdf.cell(85, 6, "Maquinas Operadas", 1, 0, 'C', True); pdf.cell(20, 6, "Perf.", 1, 1, 'C', True)
                     setup_table_row(pdf); pdf.set_font("Arial", '', 9)
 
-                perf_v = int(round(row['PERFORMANCE'] * 100))
+                # CORRECCIÓN PARA EL PORCENTAJE (Para evitar 26399%)
+                perf_val_raw = row['PERFORMANCE']
+                if pd.isna(perf_val_raw):
+                    perf_v = 0
+                elif perf_val_raw > 10: 
+                    perf_v = int(round(perf_val_raw))
+                else:
+                    perf_v = int(round(perf_val_raw * 100))
+
                 op_name = clean_text(str(row['Operador']))[:28]
                 mq = ", ".join(sorted(list(op_m.get(op_name, set())))) if op_name in op_m else "-"
                 
@@ -964,50 +969,128 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 pdf.set_text_color(33, 195, 84) if perf_v >= 90 else pdf.set_text_color(220, 20, 20)
                 pdf.cell(20, 5, f"{perf_v}%", 'B', 1, 'C'); pdf.set_text_color(50, 50, 50)
             pdf.ln(5)
+
+    def agregar_tabla_tiempos(titulo, palabras_clave, limite_minutos):
+        check_space(pdf, 45); print_section_title(pdf, titulo, theme_color)
+        resumen_eventos = {}
+        
+        if not df_pdf.empty:
+            def clasificar_fila(val):
+                if pd.isna(val): return False
+                val_upper = str(val).upper()
+                return any(kw in val_upper for kw in palabras_clave)
+
+            mask = df_pdf['Detalle_Final'].apply(clasificar_fila)
+            df_ev = df_pdf[mask]
+            
+            for _, r in df_ev.iterrows():
+                t = float(r['Tiempo (Min)'])
+                for op in str(r['Operador']).split('/'):
+                    op = op.strip()
+                    if op and op != '-':
+                        if op not in resumen_eventos: resumen_eventos[op] = {'tiempo': 0.0, 'cantidad': 0}
+                        resumen_eventos[op]['tiempo'] += t
+                        resumen_eventos[op]['cantidad'] += 1
+
+        if resumen_eventos:
+            df_res = pd.DataFrame([{'Operador': k, 'Minutos': v['tiempo'], 'Cantidad': v['cantidad']} for k, v in resumen_eventos.items()]).sort_values('Minutos', ascending=False)
+            df_res['Promedio'] = df_res['Minutos'] / df_res['Cantidad']
+            
+            def dibujar_cabeza_t():
+                setup_table_header(pdf, theme_color); pdf.set_font("Arial", 'B', 9)
+                pdf.cell(70, 6, "Operador", 1, 0, 'C', True)
+                pdf.cell(40, 6, "Total Min", 1, 0, 'C', True)
+                pdf.cell(40, 6, "Cant. Veces", 1, 0, 'C', True)
+                pdf.cell(40, 6, "Promedio Min", 1, 1, 'C', True)
+
+            dibujar_cabeza_t()
+            setup_table_row(pdf); pdf.set_font("Arial", '', 9)
+            for _, r in df_res.iterrows():
+                if pdf.get_y() > 270: 
+                    pdf.add_page(); dibujar_cabeza_t(); setup_table_row(pdf); pdf.set_font("Arial", '', 9)
+                
+                is_over = False
+                if p_tipo == "Diario":
+                    if r['Minutos'] > limite_minutos: is_over = True
+                else:
+                    if r['Promedio'] > limite_minutos: is_over = True
+
+                pdf.set_text_color(50, 50, 50)
+                pdf.cell(70, 5, " " + clean_text(r['Operador'])[:35], 'B')
+                
+                if is_over: pdf.set_text_color(220, 20, 20)
+                else: pdf.set_text_color(50, 50, 50)
+                
+                pdf.cell(40, 5, f"{r['Minutos']:.1f}", 'B', 0, 'C')
+                
+                pdf.set_text_color(50, 50, 50)
+                pdf.cell(40, 5, str(int(r['Cantidad'])), 'B', 0, 'C')
+                
+                if is_over: pdf.set_text_color(220, 20, 20)
+                else: pdf.set_text_color(50, 50, 50)
+                
+                pdf.cell(40, 5, f"{r['Promedio']:.1f}", 'B', 1, 'C')
+                pdf.set_text_color(50, 50, 50) 
+            pdf.ln(5)
+        else:
+            pdf.set_font("Arial", 'I', 10); pdf.cell(0, 10, clean_text("No hay registros de tiempo acumulado para este ítem en el período."), ln=True)
+
+    pdf.set_link(link_tiempos)
+    agregar_tabla_tiempos("Tiempo de Baño Acumulado", ["BAÑO", "BANO"], limite_minutos=8)
+    agregar_tabla_tiempos("Tiempo de Refrigerio Acumulado", ["REFRIGERIO"], limite_minutos=17)
     
     return pdf.output(dest='S').encode('latin-1')
 
-# ==========================================
-# 5. EDITOR MANUAL
-# ==========================================
-st.divider()
-with st.expander("🛠️ Editor Manual de Datos", expanded=False):
-    maq_ocultas = st.multiselect("Ocultar máquinas:", sorted(df_metrics['Máquina'].unique().tolist()) if not df_metrics.empty else [])
-    
-    if maq_ocultas:
-        df_metrics = df_metrics[~df_metrics['Máquina'].isin(maq_ocultas)]
-        df_raw = df_raw[~df_raw['Máquina'].isin(maq_ocultas)]
-        pdf_df_prod_target = pdf_df_prod_target[~pdf_df_prod_target['Máquina'].isin(maq_ocultas)]
-        df_trend = df_trend[~df_trend['Máquina'].isin(maq_ocultas)]
-        if not df_horarios.empty: df_horarios = df_horarios[~df_horarios['Máquina'].isin(maq_ocultas)]
 
 # ==========================================
-# 6. BOTONES DE EXPORTACIÓN
+# CONTENEDORES PARA ORDEN VISUAL
 # ==========================================
-st.divider()
-col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
+contenedor_botones = st.container()
+contenedor_editor = st.container()
 
-with col_btn1:
-    if st.button("Reporte ESTAMPADO (Azul)", use_container_width=True):
-        with st.spinner("Generando PDF Estampado..."):
-            pdf_data = crear_pdf("ESTAMPADO", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas)
-            st.download_button("📥 Descargar", data=pdf_data, file_name=f"Estampado_{file_label}.pdf", mime="application/pdf", use_container_width=True)
+# ==========================================
+# 5. EDITOR MANUAL (Se procesa lógicamente pero se dibuja abajo)
+# ==========================================
+with contenedor_editor:
+    st.divider()
+    with st.expander("🛠️ Editor Manual de Datos", expanded=False):
+        maq_ocultas = st.multiselect("Ocultar máquinas:", sorted(df_metrics['Máquina'].unique().tolist()) if not df_metrics.empty else [])
+        
+        if maq_ocultas:
+            df_metrics = df_metrics[~df_metrics['Máquina'].isin(maq_ocultas)]
+            df_raw = df_raw[~df_raw['Máquina'].isin(maq_ocultas)]
+            pdf_df_prod_target = pdf_df_prod_target[~pdf_df_prod_target['Máquina'].isin(maq_ocultas)]
+            df_trend = df_trend[~df_trend['Máquina'].isin(maq_ocultas)]
+            if not df_horarios.empty: df_horarios = df_horarios[~df_horarios['Máquina'].isin(maq_ocultas)]
 
-with col_btn2:
-    if st.button("Reporte SOLD. NUEVA (Naranja)", use_container_width=True):
-        with st.spinner("Generando PDF Soldadura Nueva..."):
-            pdf_data = crear_pdf("SOLDADURA NUEVA", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas)
-            st.download_button("📥 Descargar", data=pdf_data, file_name=f"Soldadura_Nueva_{file_label}.pdf", mime="application/pdf", use_container_width=True)
+# ==========================================
+# 6. BOTONES DE EXPORTACIÓN (Se dibujan arriba)
+# ==========================================
+with contenedor_botones:
+    st.divider()
+    col_btn1, col_btn2, col_btn3, col_btn4 = st.columns(4)
 
-with col_btn3:
-    if st.button("Reporte SOLD. FUMIS (Violeta)", use_container_width=True):
-        with st.spinner("Generando PDF Soldadura Fumis..."):
-            pdf_data = crear_pdf("SOLDADURA FUMIS", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas)
-            st.download_button("📥 Descargar", data=pdf_data, file_name=f"Soldadura_Fumis_{file_label}.pdf", mime="application/pdf", use_container_width=True)
+    with col_btn1:
+        if st.button("Reporte ESTAMPADO (Azul)", use_container_width=True):
+            with st.spinner("Generando PDF Estampado..."):
+                pdf_data = crear_pdf("ESTAMPADO", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas)
+                st.download_button("📥 Descargar", data=pdf_data, file_name=f"Estampado_{file_label}.pdf", mime="application/pdf", use_container_width=True)
 
-if pdf_tipo == "Mensual":
-    with col_btn4:
-        if st.button("Resumen Ejecutivo", use_container_width=True):
-            with st.spinner("Generando Resumen..."):
-                pdf_resumen = crear_pdf_resumen_ejecutivo(pdf_label, df_trend, df_metrics, df_metrics_std, df_piezas_excluidas)
-                st.download_button("📥 Descargar", data=pdf_resumen, file_name=f"Resumen_Ejecutivo_{file_label}.pdf", mime="application/pdf", use_container_width=True)
+    with col_btn2:
+        if st.button("Reporte SOLD. NUEVA (Naranja)", use_container_width=True):
+            with st.spinner("Generando PDF Soldadura Nueva..."):
+                pdf_data = crear_pdf("SOLDADURA NUEVA", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas)
+                st.download_button("📥 Descargar", data=pdf_data, file_name=f"Soldadura_Nueva_{file_label}.pdf", mime="application/pdf", use_container_width=True)
+
+    with col_btn3:
+        if st.button("Reporte SOLD. FUMIS (Violeta)", use_container_width=True):
+            with st.spinner("Generando PDF Soldadura Fumis..."):
+                pdf_data = crear_pdf("SOLDADURA FUMIS", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas)
+                st.download_button("📥 Descargar", data=pdf_data, file_name=f"Soldadura_Fumis_{file_label}.pdf", mime="application/pdf", use_container_width=True)
+
+    if pdf_tipo == "Mensual":
+        with col_btn4:
+            if st.button("Resumen Ejecutivo", use_container_width=True):
+                with st.spinner("Generando Resumen..."):
+                    pdf_resumen = crear_pdf_resumen_ejecutivo(pdf_label, df_trend, df_metrics, df_metrics_std, df_piezas_excluidas)
+                    st.download_button("📥 Descargar", data=pdf_resumen, file_name=f"Resumen_Ejecutivo_{file_label}.pdf", mime="application/pdf", use_container_width=True)
