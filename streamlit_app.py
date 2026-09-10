@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import tempfile
 import os
 import calendar
@@ -14,7 +13,17 @@ from datetime import timedelta
 # 0. MAPEOS Y GRUPOS UNIFICADOS (FUMISCOR + FAMMA)
 # ==========================================
 MAQUINAS_MAP = {
-    # === ESTAMPADO ===
+    # ==========================================
+    # 🟦 1. ÁREA: ESTAMPADO (FAMMA + FUMISCOR)
+    # ==========================================
+    # -- FAMMA (Estampado) --
+    "LINEA 1.5": "LÍNEAS ESTAMPADO FAMMA",
+    "LINEA 2": "LÍNEAS ESTAMPADO FAMMA",
+    "LINEA 3": "LÍNEAS ESTAMPADO FAMMA",
+    "LINEA 4": "LÍNEAS ESTAMPADO FAMMA",
+    "GENERAL": "LÍNEAS ESTAMPADO FAMMA", # Por históricos
+
+    # -- FUMISCOR (Estampado) --
     "P-023": "PRENSAS PROGRESIVAS", "P-024": "PRENSAS PROGRESIVAS", "P-025": "PRENSAS PROGRESIVAS", "P-026": "PRENSAS PROGRESIVAS",
     "P-027": "PRENSAS PROGRESIVAS GRANDES", "P-028": "PRENSAS PROGRESIVAS GRANDES", "P-029": "PRENSAS PROGRESIVAS GRANDES", "P-030": "PRENSAS PROGRESIVAS GRANDES",
     "BAL-002": "BALANCIN", "BAL-003": "BALANCIN", "BAL-005": "BALANCIN", "BAL-006": "BALANCIN", "BAL-007": "BALANCIN", "BAL-008": "BALANCIN", "BAL-009": "BALANCIN", "BAL-010": "BALANCIN", 
@@ -22,9 +31,31 @@ MAQUINAS_MAP = {
     "P-011": "HIDRAULICAS", "P-012": "HIDRAULICAS", "P-013": "HIDRAULICAS", "P-014": "HIDRAULICAS", "P-016": "HIDRAULICAS", "P-017": "HIDRAULICAS", "P-018": "HIDRAULICAS",
     "P-015": "MECANICAS", "P-019": "MECANICAS", "P-020": "MECANICAS", "P-021": "MECANICAS", "P-022": "MECANICAS",
     "GOF01": "Gofradora",
-    "GENERAL": "LÍNEAS ESTAMPADO",
 
-    # === SOLDADURA FUMIS ===
+    # ==========================================
+    # 🟧 2. ÁREA: SOLDADURA NUEVA (FAMMA + RENAULT FUMISCOR)
+    # ==========================================
+    # -- FAMMA (Celdas y PRP) --
+    "Cell 13 Famma": "CELDAS FAMMA",
+    "Cell 14 Famma": "CELDAS FAMMA",
+    "Cell 15A Famma": "CELDAS FAMMA",
+    "Cell 15B Famma": "CELDAS FAMMA",
+    "Cell 16 Famma": "CELDAS FAMMA",
+    "Cell 17 Famma": "CELDAS FAMMA",
+    "Cell 3 Famma": "CELDAS FAMMA",
+    "PRP 1": "PRP FAMMA",
+    "PRP 2": "PRP FAMMA",
+    "PRP 3": "PRP FAMMA",
+
+    # -- FUMISCOR (Soldadura Nueva Renault) --
+    "Celda 01 Fumis": "CELDA RENAULT", "Celda 02 Fumis": "CELDA RENAULT", "Celda 03 Fumis": "CELDA RENAULT", "Celda 04 Fumis": "CELDA RENAULT",
+    "Celda 05 Fumis": "CELDA RENAULT", "Celda 06 Fumis": "CELDA RENAULT", "Celda 07 Fumis": "CELDA RENAULT", "Celda 08 Fumis": "CELDA RENAULT",
+    "Celda 09 Fumis": "CELDA RENAULT", "Celda 10 Fumis": "CELDA RENAULT", "Celda 11 Fumis": "CELDA RENAULT", "Celda 12 Fumis": "CELDA RENAULT",
+    "Celda 13 Fumis": "CELDA RENAULT", "Celda 14 Fumis": "CELDA RENAULT", "Celda 15 Fumis": "CELDA RENAULT",
+
+    # ==========================================
+    # 🟪 3. ÁREA: SOLDADURA FUMIS (PRP, CELDAS FUMIS, DOBLADORAS)
+    # ==========================================
     "SOP-003": "PRP FUMIS", "SOP-005": "PRP FUMIS", "SOP-008": "PRP FUMIS", "SOP-009": "PRP FUMIS", "SOP-010": "PRP FUMIS",
     "SOP-017": "PRP FUMIS", "SOP-018": "PRP FUMIS", "SOP-019": "PRP FUMIS", "SOP-020": "PRP FUMIS", "SOP-022": "PRP FUMIS",
     "SOP-023": "PRP FUMIS", "SOP-024": "PRP FUMIS", "SOP-025": "PRP FUMIS", "SOP-026": "PRP FUMIS", "SOP-027": "PRP FUMIS", 
@@ -33,25 +64,22 @@ MAQUINAS_MAP = {
     "DOB-006": "DOBLADORA", "DOB-007": "DOBLADORA", "DOB-008": "DOBLADORA", "DOB-009": "DOBLADORA", "DOB-010": "DOBLADORA",
     "Cel1 - Rob13 - RUEDA AUX.": "CELDA SOLDADURA FUMIS", "Cel2 - Rob1 - ALMOHADON": "CELDA SOLDADURA FUMIS",
     "Cel3 - Rob14 - HANGERS": "CELDA SOLDADURA FUMIS", "Cel4 - Rob6 - DOB TORCHA": "CELDA SOLDADURA FUMIS",
-    "Cel5 - Rob4 - Respaldo 60/40": "CELDA SOLDADURA FUMIS", "HANGERS NISSAN": "CELDA SOLDADURA FUMIS",
-
-    # === SOLDADURA NUEVA RENAULT ===
-    "Celda 01 Fumis": "CELDA RENAULT", "Celda 02 Fumis": "CELDA RENAULT", "Celda 03 Fumis": "CELDA RENAULT", "Celda 04 Fumis": "CELDA RENAULT",
-    "Celda 05 Fumis": "CELDA RENAULT", "Celda 06 Fumis": "CELDA RENAULT", "Celda 07 Fumis": "CELDA RENAULT", "Celda 08 Fumis": "CELDA RENAULT",
-    "Celda 09 Fumis": "CELDA RENAULT", "Celda 10 Fumis": "CELDA RENAULT", "Celda 11 Fumis": "CELDA RENAULT", "Celda 12 Fumis": "CELDA RENAULT",
-    "Celda 13 Fumis": "CELDA RENAULT", "Celda 14 Fumis": "CELDA RENAULT", "Celda 15 Fumis": "CELDA RENAULT"
+    "Cel5 - Rob4 - Respaldo 60/40": "CELDA SOLDADURA FUMIS", "HANGERS NISSAN": "CELDA SOLDADURA FUMIS"
 }
 
 def asignar_grupo_dinamico(maq):
+    if maq in MAQUINAS_MAP: return MAQUINAS_MAP[maq]
     maq_u = str(maq).strip().upper()
-    if maq_u in MAQUINAS_MAP: return MAQUINAS_MAP[maq_u]
+    for key in MAQUINAS_MAP.keys():
+        if str(key).upper() == maq_u: return MAQUINAS_MAP[key]
+    
     if 'CELL' in maq_u or 'CELDA' in maq_u: return 'CELDAS FAMMA'
-    if 'LINEA' in maq_u or 'LÍNEA' in maq_u: return 'LÍNEAS ESTAMPADO'
+    if 'LINEA' in maq_u or 'LÍNEA' in maq_u: return 'LÍNEAS ESTAMPADO FAMMA'
     if 'PRP' in maq_u or 'SOLD' in maq_u: return 'PRP FAMMA'
     return 'Otro'
 
 def asignar_area_principal(grupo):
-    if grupo in ['PRENSAS PROGRESIVAS', 'PRENSAS PROGRESIVAS GRANDES', 'BALANCIN', 'HIDRAULICAS', 'MECANICAS', 'Gofradora', 'LÍNEAS ESTAMPADO']:
+    if grupo in ['PRENSAS PROGRESIVAS', 'PRENSAS PROGRESIVAS GRANDES', 'BALANCIN', 'HIDRAULICAS', 'MECANICAS', 'Gofradora', 'LÍNEAS ESTAMPADO FAMMA']:
         return 'ESTAMPADO'
     elif grupo in ['CELDA RENAULT', 'CELDAS FAMMA', 'PRP FAMMA']:
         return 'SOLDADURA NUEVA'
@@ -117,6 +145,7 @@ def fix_percentages(df):
 @st.cache_data(ttl=300)
 def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, lista_piezas_h=None):
     try:
+        # CONEXIÓN A AMBAS BASES DE DATOS
         conn_famma = st.connection("famma", type="sql")
         conn_fumiscor = st.connection("fumiscor", type="sql")
         
@@ -200,7 +229,7 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
         if not df_op_target.empty:
             df_op_target = df_op_target[~df_op_target['Operador'].str.lower().str.contains('usuario|admin', regex=True, na=False)]
 
-        # --- QUERIES DE EVENTOS (Separado porque Fumiscor no tiene ANDON_01 ni Niveles 5-9) ---
+        # --- QUERIES DE EVENTOS (Separado para Famma y Fumiscor por estructura) ---
         q_event_famma = f"""
             SELECT e.Id as Evento_Id, c.Name as Máquina, e.Started as Inicio, e.Finish as Fin, e.Interval as [Tiempo (Min)], 
                    t1.Name as [Nivel Evento 1], t2.Name as [Nivel Evento 2], t3.Name as [Nivel Evento 3], t4.Name as [Nivel Evento 4], 
@@ -422,8 +451,8 @@ def setup_table_row(pdf):
 def set_pdf_color_metric(pdf, val, metric_name):
     targets = {'OEE': 75.0, 'DISPONIBILIDAD': 88.0, 'PERFORMANCE': 90.0, 'CALIDAD': 95.0}
     target = targets.get(metric_name.upper(), 85.0)
-    if val >= target: pdf.set_text_color(33, 195, 84) # Verde
-    else: pdf.set_text_color(220, 20, 20) # Rojo
+    if val >= target: pdf.set_text_color(33, 195, 84) 
+    else: pdf.set_text_color(220, 20, 20) 
 
 def print_pdf_metric_row(pdf, prefix, m, m_std=None):
     pdf.set_font("Arial", 'B', 10); pdf.set_text_color(0, 0, 0)
@@ -755,6 +784,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                         for day_idx in range(5):
                             d_data = grp[grp['Dia'].dt.weekday == day_idx]
                             pdf.cell(w_day, 5, d_data.iloc[0]['Rango'] if not d_data.empty else "", 1, 0 if day_idx < 4 else 1, 'C')
+                        pdf.ln()
                 else: # Diario
                     w_maq = 35; w_tur = 20; w_hor = 30; w_tie = 35
                     pdf.cell(w_maq, 6, "Maquina", 1, 0, 'C', True); pdf.cell(w_tur, 6, "Turno", 1, 0, 'C', True)
@@ -773,6 +803,9 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                         pdf.cell(w_hor, 5, clean_text(r_hor['Hora_Cierre']), 1, 0, 'C')
                         pdf.cell(w_tie, 5, mins_to_duration_str(r_hor.get('Apertura_Neta_Min', 0)), 1, 0, 'C')
                         pdf.cell(w_tie, 5, mins_to_duration_str(r_hor.get('No_Registrado_Min', 0)), 1, 1, 'C')
+            else:
+                pdf.cell(185, 5, "No hay registros de turnos para este periodo.", 1, 1, 'C')
+            pdf.ln(5)
 
         # 4. RESUMEN TIEMPOS
         check_space(pdf, 30)
@@ -871,7 +904,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 t_parada = df_maq[df_maq['Estado_Global'] == 'Parada Programada']['Tiempo (Min)'].sum()
                 t_desc = df_maq[df_maq['Estado_Global'] == 'Descanso']['Tiempo (Min)'].sum()
 
-                t_noreg = 0 # Calculo omitido por brevedad, asumimos 0 si no se procesan horarios exactos aquí o se implementa la lógica original
+                t_noreg = 0 
                 top3 = []
                 df_mf = df_maq[df_maq['Estado_Global'] == 'Falla/Gestión']
                 if not df_mf.empty:
@@ -987,13 +1020,13 @@ with col_btn2:
     if st.button("Reporte SOLD. NUEVA (Naranja)", use_container_width=True):
         with st.spinner("Generando PDF Soldadura Nueva..."):
             pdf_data = crear_pdf("SOLDADURA NUEVA", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas)
-            st.download_button("📥 Descargar", data=pdf_data, file_name=f"Sold_Nueva_{file_label}.pdf", mime="application/pdf", use_container_width=True)
+            st.download_button("📥 Descargar", data=pdf_data, file_name=f"Soldadura_Nueva_{file_label}.pdf", mime="application/pdf", use_container_width=True)
 
 with col_btn3:
     if st.button("Reporte SOLD. FUMIS (Violeta)", use_container_width=True):
         with st.spinner("Generando PDF Soldadura Fumis..."):
             pdf_data = crear_pdf("SOLDADURA FUMIS", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas)
-            st.download_button("📥 Descargar", data=pdf_data, file_name=f"Sold_Fumis_{file_label}.pdf", mime="application/pdf", use_container_width=True)
+            st.download_button("📥 Descargar", data=pdf_data, file_name=f"Soldadura_Fumis_{file_label}.pdf", mime="application/pdf", use_container_width=True)
 
 if pdf_tipo == "Mensual":
     with col_btn4:
