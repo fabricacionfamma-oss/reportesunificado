@@ -92,7 +92,6 @@ st.markdown("""
 col_title, col_btn = st.columns([4, 1])
 with col_title:
     st.markdown('<div class="header-style">📄 Reportes PDF Unificados (Fumiscor & Famma)</div>', unsafe_allow_html=True)
-    st.write("Seleccione los parámetros para extraer datos consolidados de ambas plantas.")
 with col_btn:
     if st.button("Limpiar Caché", use_container_width=True):
         st.cache_data.clear()
@@ -307,53 +306,51 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
         st.error(f"Error procesando los datos: {e}")
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
-
 # ==========================================
-# 3. INTERFAZ: CONFIGURACIÓN PERIODO
+# 3. INTERFAZ: CONFIGURACIÓN PERIODO (REDISEÑADA)
 # ==========================================
-col_p1, col_p2, col_p3 = st.columns([1, 1.2, 2.0])
+st.markdown("### Configuración del Reporte")
+with st.container():
+    col_t1, col_t2, col_t3 = st.columns([1, 1.5, 1])
 
-with col_p1:
-    st.write("**1. Tipo de Reporte:**")
-    pdf_tipo = st.radio("Período:", ["Diario", "Semanal", "Mensual"], horizontal=True, label_visibility="collapsed")
+    with col_t1:
+        pdf_tipo = st.radio("1. Tipo de Reporte:", ["Diario", "Semanal", "Mensual"], horizontal=True)
 
-with col_p2:
-    st.write("**2. Seleccione el Período:**")
-    today = pd.to_datetime("today").date()
-    pdf_ini, pdf_fin, pdf_mes, pdf_anio = None, None, None, None
-    pdf_label, file_label = "", ""
+    with col_t2:
+        today = pd.to_datetime("today").date()
+        pdf_ini, pdf_fin, pdf_mes, pdf_anio = None, None, None, None
+        pdf_label, file_label = "", ""
 
-    if pdf_tipo == "Diario":
-        pdf_fecha = st.date_input("Día para PDF:", value=today)
-        pdf_ini = pdf_fin = pd.to_datetime(pdf_fecha)
-        pdf_label = f"Dia {pdf_fecha.strftime('%d-%m-%Y')}"
-        file_label = pdf_label
-        
-    elif pdf_tipo == "Semanal":
-        fecha_ref = st.date_input("Seleccione un día de la semana deseada:", value=today)
-        dt_ref = pd.to_datetime(fecha_ref)
-        pdf_ini = dt_ref - timedelta(days=dt_ref.weekday()); pdf_fin = pdf_ini + timedelta(days=6) 
-        semana_num = pdf_ini.isocalendar().week
-        pdf_label = f"Semana {semana_num} ({pdf_ini.strftime('%d/%m/%Y')} al {pdf_fin.strftime('%d/%m/%Y')})"
-        file_label = f"Semana_{semana_num}_{pdf_ini.strftime('%d-%m-%Y')}_al_{pdf_fin.strftime('%d-%m-%Y')}"
-        
-    elif pdf_tipo == "Mensual":
-        c_m, c_y = st.columns(2)
-        mes_list = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-        with c_m: mes_sel = st.selectbox("Mes", mes_list, index=today.month-1)
-        with c_y: anio_sel = st.selectbox("Año", range(2023, today.year + 2), index=today.year-2023)
-        pdf_mes = mes_list.index(mes_sel) + 1; pdf_anio = anio_sel
-        pdf_ini = pd.to_datetime(f"{pdf_anio}-{pdf_mes}-01")
-        last_day = calendar.monthrange(pdf_anio, pdf_mes)[1]
-        pdf_fin = pd.to_datetime(f"{pdf_anio}-{pdf_mes}-{last_day}")
-        pdf_label = f"{mes_sel} {pdf_anio}"; file_label = f"{mes_sel}_{pdf_anio}"
+        if pdf_tipo == "Diario":
+            pdf_fecha = st.date_input("2. Día para PDF:", value=today)
+            pdf_ini = pdf_fin = pd.to_datetime(pdf_fecha)
+            pdf_label = f"Dia {pdf_fecha.strftime('%d-%m-%Y')}"
+            file_label = pdf_label
+        elif pdf_tipo == "Semanal":
+            fecha_ref = st.date_input("2. Seleccione un día de la semana:", value=today)
+            dt_ref = pd.to_datetime(fecha_ref)
+            pdf_ini = dt_ref - timedelta(days=dt_ref.weekday()); pdf_fin = pdf_ini + timedelta(days=6) 
+            semana_num = pdf_ini.isocalendar().week
+            pdf_label = f"Semana {semana_num} ({pdf_ini.strftime('%d/%m/%Y')} al {pdf_fin.strftime('%d/%m/%Y')})"
+            file_label = f"Semana_{semana_num}_{pdf_ini.strftime('%d-%m-%Y')}_al_{pdf_fin.strftime('%d-%m-%Y')}"
+        elif pdf_tipo == "Mensual":
+            st.write("2. Seleccione el Período:")
+            c_m, c_y = st.columns(2)
+            mes_list = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+            with c_m: mes_sel = st.selectbox("Mes", mes_list, index=today.month-1, label_visibility="collapsed")
+            with c_y: anio_sel = st.selectbox("Año", range(2023, today.year + 2), index=today.year-2023, label_visibility="collapsed")
+            pdf_mes = mes_list.index(mes_sel) + 1; pdf_anio = anio_sel
+            pdf_ini = pd.to_datetime(f"{pdf_anio}-{pdf_mes}-01")
+            last_day = calendar.monthrange(pdf_anio, pdf_mes)[1]
+            pdf_fin = pd.to_datetime(f"{pdf_anio}-{pdf_mes}-{last_day}")
+            pdf_label = f"{mes_sel} {pdf_anio}"; file_label = f"{mes_sel}_{pdf_anio}"
 
-    st.markdown("---")
-    ignorar_piezas_h = st.checkbox("Ignorar piezas H (Proyecto H)", value=False)
-    lista_piezas_h = get_piezas_h() if ignorar_piezas_h else []
-    
-    if ignorar_piezas_h:
-        st.success("✅ **Filtro Activado:** Se omitirán del reporte las piezas H que tuvieron producción.")
+    with col_t3:
+        st.write("**3. Opciones Adicionales:**")
+        ignorar_piezas_h = st.checkbox("Ignorar piezas H (Proyecto H)", value=False)
+        if ignorar_piezas_h:
+            st.success("Filtro Activado")
+        lista_piezas_h = get_piezas_h() if ignorar_piezas_h else []
 
 with st.spinner("Extrayendo y unificando información..."):
     df_raw, pdf_df_prod_target, pdf_df_op_target, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas = fetch_data_from_db(pdf_ini, pdf_fin, pdf_tipo, mes=pdf_mes, anio=pdf_anio, lista_piezas_h=lista_piezas_h)
@@ -422,8 +419,10 @@ def setup_table_row(pdf):
 def set_pdf_color_metric(pdf, val, metric_name):
     targets = {'OEE': 75.0, 'DISPONIBILIDAD': 88.0, 'PERFORMANCE': 90.0, 'CALIDAD': 95.0}
     target = targets.get(metric_name.upper(), 85.0)
-    if val >= target: pdf.set_text_color(33, 195, 84) 
-    else: pdf.set_text_color(220, 20, 20) 
+    if val >= target:
+        pdf.set_text_color(33, 195, 84) 
+    else:
+        pdf.set_text_color(220, 20, 20) 
 
 def print_pdf_metric_row(pdf, prefix, m, m_std=None):
     pdf.set_font("Arial", 'B', 10); pdf.set_text_color(0, 0, 0)
@@ -439,6 +438,12 @@ def print_pdf_metric_row(pdf, prefix, m, m_std=None):
     pdf.set_text_color(0, 0, 0); pdf.write(7, clean_text("  |  Cal: "))
     set_pdf_color_metric(pdf, m.get('CALIDAD', 0)*100, 'CALIDAD'); pdf.write(7, f"{m.get('CALIDAD', 0)*100:.1f}%")
     pdf.set_text_color(0, 0, 0); pdf.ln(7)
+
+    if m_std is not None and m_std.get('OEE', 0) != m.get('OEE', 0):
+        pdf.set_font("Arial", 'I', 8); pdf.set_text_color(120, 120, 120)
+        pdf.cell(10)
+        pdf.write(5, clean_text(f"(Usual c/ Piezas H - OEE: {m_std.get('OEE', 0)*100:.1f}% | Disp: {m_std.get('DISPONIBILIDAD', 0)*100:.1f}% | Perf: {m_std.get('PERFORMANCE', 0)*100:.1f}% | Cal: {m_std.get('CALIDAD', 0)*100:.1f}%)"))
+        pdf.ln(5)
 
 def add_image_safe(pdf, img_path, w_mm, h_mm, center=True):
     if pdf.get_y() + h_mm > 275: pdf.add_page()
@@ -790,7 +795,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         pdf.cell(38, 5, clean_text(mins_to_duration_str(t_proy_g)), border=1, align='C')
         pdf.cell(38, 5, clean_text(mins_to_duration_str(t_desc_g)), border=1, align='C', ln=True); pdf.ln(4)
 
-        # Análisis de Fallas y Tendencias Visual (GRÁFICOS DE LÍNEAS Y BARRAS ÚNICAMENTE)
+        # Análisis de Fallas y Tendencias Visual (SOLO GRÁFICOS DE BARRAS Y LÍNEAS)
         check_space(pdf, 170)
         print_section_title(pdf, "Análisis de Fallas y Tendencias", theme_color)
 
@@ -853,7 +858,11 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 
                 row_h = max(1, len(top3)) * 5 
                 if pdf.get_y() + row_h > 265: pdf.add_page(); draw_head_maq(); setup_table_row(pdf); pdf.set_font("Arial", '', 7)
-                pdf.set_fill_color(235, 243, 250) if fill_t else pdf.set_fill_color(255, 255, 255)
+                
+                if fill_t:
+                    pdf.set_fill_color(235, 243, 250)
+                else:
+                    pdf.set_fill_color(255, 255, 255)
 
                 x_p, y_p = pdf.get_x(), pdf.get_y()
                 pdf.cell(25, row_h, clean_text(maq)[:15], 1, 0, 'C', True)
@@ -966,7 +975,12 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 
                 pdf.cell(50, 5, " " + op_name, 'B'); pdf.cell(35, 5, " " + clean_text(str(row['Fábrica']))[:18], 'B')
                 pdf.cell(85, 5, " " + clean_text(mq)[:50], 'B')
-                pdf.set_text_color(33, 195, 84) if perf_v >= 90 else pdf.set_text_color(220, 20, 20)
+                
+                if perf_v >= 90:
+                    pdf.set_text_color(33, 195, 84)
+                else:
+                    pdf.set_text_color(220, 20, 20)
+                
                 pdf.cell(20, 5, f"{perf_v}%", 'B', 1, 'C'); pdf.set_text_color(50, 50, 50)
             pdf.ln(5)
 
@@ -988,20 +1002,21 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 for op in str(r['Operador']).split('/'):
                     op = op.strip()
                     if op and op != '-':
-                        if op not in resumen_eventos: resumen_eventos[op] = {'tiempo': 0.0, 'cantidad': 0}
+                        if op not in resumen_eventos: resumen_eventos[op] = {'tiempo': 0.0, 'cantidad': 0, 'fabrica': r.get('Fábrica', '-')}
                         resumen_eventos[op]['tiempo'] += t
                         resumen_eventos[op]['cantidad'] += 1
 
         if resumen_eventos:
-            df_res = pd.DataFrame([{'Operador': k, 'Minutos': v['tiempo'], 'Cantidad': v['cantidad']} for k, v in resumen_eventos.items()]).sort_values('Minutos', ascending=False)
+            df_res = pd.DataFrame([{'Operador': k, 'Fábrica': v['fabrica'], 'Minutos': v['tiempo'], 'Cantidad': v['cantidad']} for k, v in resumen_eventos.items()]).sort_values('Minutos', ascending=False)
             df_res['Promedio'] = df_res['Minutos'] / df_res['Cantidad']
             
             def dibujar_cabeza_t():
                 setup_table_header(pdf, theme_color); pdf.set_font("Arial", 'B', 9)
-                pdf.cell(70, 6, "Operador", 1, 0, 'C', True)
-                pdf.cell(40, 6, "Total Min", 1, 0, 'C', True)
-                pdf.cell(40, 6, "Cant. Veces", 1, 0, 'C', True)
-                pdf.cell(40, 6, "Promedio Min", 1, 1, 'C', True)
+                pdf.cell(50, 6, "Operador", 1, 0, 'C', True)
+                pdf.cell(35, 6, "Fabrica", 1, 0, 'C', True)
+                pdf.cell(35, 6, "Total Min", 1, 0, 'C', True)
+                pdf.cell(35, 6, "Cant. Veces", 1, 0, 'C', True)
+                pdf.cell(35, 6, "Promedio Min", 1, 1, 'C', True)
 
             dibujar_cabeza_t()
             setup_table_row(pdf); pdf.set_font("Arial", '', 9)
@@ -1016,20 +1031,21 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                     if r['Promedio'] > limite_minutos: is_over = True
 
                 pdf.set_text_color(50, 50, 50)
-                pdf.cell(70, 5, " " + clean_text(r['Operador'])[:35], 'B')
+                pdf.cell(50, 5, " " + clean_text(r['Operador'])[:25], 'B')
+                pdf.cell(35, 5, " " + clean_text(str(r['Fábrica']))[:18], 'B')
                 
                 if is_over: pdf.set_text_color(220, 20, 20)
                 else: pdf.set_text_color(50, 50, 50)
                 
-                pdf.cell(40, 5, f"{r['Minutos']:.1f}", 'B', 0, 'C')
+                pdf.cell(35, 5, f"{r['Minutos']:.1f}", 'B', 0, 'C')
                 
                 pdf.set_text_color(50, 50, 50)
-                pdf.cell(40, 5, str(int(r['Cantidad'])), 'B', 0, 'C')
+                pdf.cell(35, 5, str(int(r['Cantidad'])), 'B', 0, 'C')
                 
                 if is_over: pdf.set_text_color(220, 20, 20)
                 else: pdf.set_text_color(50, 50, 50)
                 
-                pdf.cell(40, 5, f"{r['Promedio']:.1f}", 'B', 1, 'C')
+                pdf.cell(35, 5, f"{r['Promedio']:.1f}", 'B', 1, 'C')
                 pdf.set_text_color(50, 50, 50) 
             pdf.ln(5)
         else:
