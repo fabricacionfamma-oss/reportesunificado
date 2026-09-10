@@ -124,7 +124,6 @@ def run_query_safe(conn, query):
 def fix_percentages(df):
     if not df.empty and 'OEE' in df.columns and df['OEE'].max() > 1.5:
         df['OEE'] = df['OEE'] / 100.0
-        # Validación inteligente de columnas para evitar el KeyError
         for col in ['DISPONIBILIDAD', 'PERFORMANCE', 'CALIDAD']:
             if col in df.columns:
                 df[col] = df[col] / 100.0
@@ -210,7 +209,7 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
             df_op_target = df_op_target[~df_op_target['Operador'].str.lower().str.contains('usuario|admin', regex=True, na=False)]
             df_op_target['Fábrica'] = df_op_target['Fábrica'].apply(unificar_fabrica)
 
-        # --- QUERIES DE EVENTOS (Separado para Famma y Fumiscor) ---
+        # --- QUERIES DE EVENTOS ---
         q_event_famma = f"""
             SELECT e.Id as Evento_Id, c.Name as Máquina, e.Started as Inicio, e.Finish as Fin, e.Interval as [Tiempo (Min)], 
                    t1.Name as [Nivel Evento 1], t2.Name as [Nivel Evento 2], t3.Name as [Nivel Evento 3], t4.Name as [Nivel Evento 4], 
@@ -308,7 +307,7 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
 
 # ==========================================
-# 3. INTERFAZ: CONFIGURACIÓN PERIODO (REDISEÑADA)
+# 3. INTERFAZ: CONFIGURACIÓN PERIODO
 # ==========================================
 st.markdown("### Configuración del Reporte")
 with st.container():
@@ -346,12 +345,21 @@ with st.container():
             pdf_fin = pd.to_datetime(f"{pdf_anio}-{pdf_mes}-{last_day}")
             pdf_label = f"{mes_sel} {pdf_anio}"; file_label = f"{mes_sel}_{pdf_anio}"
 
+        pdf_mes_real = pdf_ini.month if pdf_ini is not None else today.month
+        pdf_anio_real = pdf_ini.year if pdf_ini is not None else today.year
+
     with col_t3:
         st.write("**3. Opciones Adicionales:**")
         ignorar_piezas_h = st.checkbox("Ignorar piezas H (Proyecto H)", value=False)
         if ignorar_piezas_h:
             st.success("Filtro Activado")
         lista_piezas_h = get_piezas_h() if ignorar_piezas_h else []
+
+    # --- ALERTA DE DICIEMBRE Y MESES FUTUROS ---
+    if pdf_anio_real > 2026 or (pdf_anio_real == 2026 and pdf_mes_real >= 12):
+        st.error("⚠️ **Aviso Importante:** Has seleccionado Diciembre (o posterior). Debes solicitar la actualización del código con los nuevos valores objetivo (MIN y TRG) para este período.")
+    elif pdf_anio_real < 2026 or pdf_mes_real not in [9, 10, 11]:
+        st.info("ℹ️ **Nota:** El mes seleccionado se encuentra fuera del rango de objetivos programados (Sep-Nov 2026). Se usarán valores estándar.")
 
 with st.spinner("Extrayendo y unificando información..."):
     df_raw, pdf_df_prod_target, pdf_df_op_target, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas = fetch_data_from_db(pdf_ini, pdf_fin, pdf_tipo, mes=pdf_mes, anio=pdf_anio, lista_piezas_h=lista_piezas_h)
@@ -380,9 +388,10 @@ def mins_to_duration_str(m):
     m = int(m); return f"{m//60:02d}:{m%60:02d} hs"
 
 class ReportePDF(FPDF):
-    def __init__(self, area, fecha_str, theme_color):
+    def __init__(self, area, fecha_str, theme_color, mes=None):
         super().__init__()
         self.area = area; self.fecha_str = fecha_str; self.theme_color = theme_color
+        self.mes = mes
 
     def header(self):
         if os.path.exists("logo.jpg"): self.image("logo.jpg", 10, 8, 30)
@@ -417,13 +426,44 @@ def setup_table_header(pdf, theme_color):
 def setup_table_row(pdf):
     pdf.set_fill_color(255, 255, 255); pdf.set_text_color(50, 50, 50); pdf.set_draw_color(200, 200, 200)
 
-def set_pdf_color_metric(pdf, val, metric_name):
-    targets = {'OEE': 75.0, 'DISPONIBILIDAD': 88.0, 'PERFORMANCE': 90.0, 'CALIDAD': 95.0}
-    target = targets.get(metric_name.upper(), 85.0)
-    if val >= target:
-        pdf.set_text_color(33, 195, 84) 
+def set_pdf_color_metric(pdf, val, metric_name, area_override=None):
+    mes = getattr(pdf, 'mes', None)
+    area = area_override or getattr(pdf, 'area', None)
+    
+    # Valores de Target por defecto: (MIN, TRG)
+    targets = {'OEE': (75.0, 75.0), 'DISPONIBILIDAD': (88.0, 88.0), 'PERFORMANCE': (90.0, 90.0), 'CALIDAD': (95.0, 95.0)}
+    
+    # Objetivos dinámicos: Septiembre(9), Octubre(10), Noviembre(11)
+    if mes in [9, 10, 11] and area and area != 'GLOBAL PLANTAS':
+        area_grp = 'ESTAMPADO' if 'ESTAMPADO' in area.upper() else 'SOLDADURA'
+        
+        # Mapeo de valores con formato (MIN, TRG)
+        obj_map = {
+            9: {
+                'ESTAMPADO': {'OEE': (68.0, 79.0), 'PERFORMANCE': (82.0, 90.0), 'CALIDAD': (99.0, 99.5), 'DISPONIBILIDAD': (84.0, 88.5)},
+                'SOLDADURA': {'OEE': (59.0, 72.0), 'PERFORMANCE': (70.0, 80.0), 'CALIDAD': (99.0, 99.5), 'DISPONIBILIDAD': (84.5, 90.0)},
+            },
+            10: {
+                'ESTAMPADO': {'OEE': (70.0, 80.0), 'PERFORMANCE': (82.0, 90.0), 'CALIDAD': (99.0, 99.5), 'DISPONIBILIDAD': (86.0, 89.5)},
+                'SOLDADURA': {'OEE': (70.0, 80.0), 'PERFORMANCE': (82.0, 87.0), 'CALIDAD': (99.0, 99.5), 'DISPONIBILIDAD': (86.5, 92.0)},
+            },
+            11: {
+                'ESTAMPADO': {'OEE': (80.0, 87.0), 'PERFORMANCE': (90.0, 95.0), 'CALIDAD': (99.0, 99.5), 'DISPONIBILIDAD': (90.0, 92.25)},
+                'SOLDADURA': {'OEE': (80.0, 87.0), 'PERFORMANCE': (90.0, 95.0), 'CALIDAD': (99.0, 99.5), 'DISPONIBILIDAD': (90.0, 92.5)},
+            }
+        }
+        
+        if metric_name.upper() in obj_map[mes][area_grp]:
+            targets[metric_name.upper()] = obj_map[mes][area_grp][metric_name.upper()]
+            
+    min_val, trg_val = targets.get(metric_name.upper(), (85.0, 85.0))
+    
+    if val >= trg_val:
+        pdf.set_text_color(33, 195, 84)  # Verde (Alcanza o supera Target)
+    elif val >= min_val:
+        pdf.set_text_color(220, 140, 0)  # Ámbar/Amarillo (Supera el Mínimo pero no el Target)
     else:
-        pdf.set_text_color(220, 20, 20) 
+        pdf.set_text_color(220, 20, 20)  # Rojo (Por debajo del Mínimo)
 
 def print_pdf_metric_row(pdf, prefix, m, m_std=None):
     pdf.set_font("Arial", 'B', 10); pdf.set_text_color(0, 0, 0)
@@ -450,9 +490,9 @@ def add_image_safe(pdf, img_path, w_mm, h_mm, center=True):
 # ==========================================
 # 5.A. MOTOR PARA RESUMEN EJECUTIVO
 # ==========================================
-def crear_pdf_resumen_ejecutivo(fecha_str, df_trend, df_metrics_pdf, df_metrics_std_pdf, df_piezas_excluidas):
+def crear_pdf_resumen_ejecutivo(fecha_str, df_trend, df_metrics_pdf, df_metrics_std_pdf, df_piezas_excluidas, mes=None):
     theme_color = (44, 62, 80) 
-    pdf = ReportePDF("GLOBAL PLANTAS", fecha_str, theme_color)
+    pdf = ReportePDF("GLOBAL PLANTAS", fecha_str, theme_color, mes=mes)
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     print_section_title(pdf, "RESUMEN EJECUTIVO: KPI POR ÁREA", theme_color)
@@ -494,7 +534,7 @@ def crear_pdf_resumen_ejecutivo(fecha_str, df_trend, df_metrics_pdf, df_metrics_
             return oee, disp, perf, cal
         return 0, 0, 0, 0
 
-    def draw_kpi_row(pdf_obj, y, title, oee, disp, perf, cal, theme_col, std_metrics=None):
+    def draw_kpi_row(pdf_obj, y, title, oee, disp, perf, cal, theme_col, std_metrics=None, area_name=None):
         pdf_obj.set_xy(10, y)
         pdf_obj.set_font("Arial", 'B', 12); pdf_obj.set_text_color(*theme_col)
         pdf_obj.cell(0, 6, clean_text(title), ln=1)
@@ -506,7 +546,7 @@ def crear_pdf_resumen_ejecutivo(fecha_str, df_trend, df_metrics_pdf, df_metrics_
             pdf_inner.set_font("Arial", 'B', 9); pdf_inner.set_fill_color(*th_col); pdf_inner.set_text_color(255, 255, 255)
             pdf_inner.cell(w, 8, clean_text(title_box), border=1, align='C', fill=True, ln=2)
             pdf_inner.set_fill_color(245, 245, 245)
-            set_pdf_color_metric(pdf_inner, val*100, title_box)
+            set_pdf_color_metric(pdf_inner, val*100, title_box, area_override=area_name)
             pdf_inner.set_font("Arial", 'B', 16)
             pdf_inner.cell(w, 12, f"{val*100:.1f}%", border=1, align='C', fill=True)
         
@@ -528,7 +568,7 @@ def crear_pdf_resumen_ejecutivo(fecha_str, df_trend, df_metrics_pdf, df_metrics_
         oee, disp, perf, cal = calc_metrics(met_planta, area_name)
         std_mets = calc_metrics(met_planta_std, area_name) if is_h_active else None
         t_col = (15, 76, 129) if area_name == 'ESTAMPADO' else (211, 84, 0) if area_name == 'SOLDADURA NUEVA' else (142, 68, 173)
-        y_curr = draw_kpi_row(pdf, y_curr, f"INDICADORES: {area_name}", oee, disp, perf, cal, t_col, std_mets)
+        y_curr = draw_kpi_row(pdf, y_curr, f"INDICADORES: {area_name}", oee, disp, perf, cal, t_col, std_mets, area_name)
         y_curr += 8
 
     if not df_trend.empty:
@@ -565,10 +605,39 @@ def crear_pdf_resumen_ejecutivo(fecha_str, df_trend, df_metrics_pdf, df_metrics_
 
     return pdf.output(dest='S').encode('latin-1')
 
+
+def obtener_leyenda_objetivos(mes, area):
+    if area == 'GLOBAL PLANTAS':
+        return "📌 Objetivos por defecto: OEE: 75.0% | Disp: 88.0% | Perf: 90.0% | Cal: 95.0%"
+
+    area_grp = 'ESTAMPADO' if 'ESTAMPADO' in area.upper() else 'SOLDADURA'
+    
+    obj_map = {
+        9: {
+            'ESTAMPADO': {'OEE': 79.0, 'PERF': 90.0, 'CAL': 99.5, 'DISP': 88.5},
+            'SOLDADURA': {'OEE': 72.0, 'PERF': 80.0, 'CAL': 99.5, 'DISP': 90.0},
+        },
+        10: {
+            'ESTAMPADO': {'OEE': 80.0, 'PERF': 90.0, 'CAL': 99.5, 'DISP': 89.5},
+            'SOLDADURA': {'OEE': 80.0, 'PERF': 87.0, 'CAL': 99.5, 'DISP': 92.0},
+        },
+        11: {
+            'ESTAMPADO': {'OEE': 87.0, 'PERF': 95.0, 'CAL': 99.5, 'DISP': 92.25},
+            'SOLDADURA': {'OEE': 87.0, 'PERF': 95.0, 'CAL': 99.5, 'DISP': 92.5},
+        }
+    }
+    
+    if mes in obj_map:
+        t = obj_map[mes][area_grp]
+        return f"📌 Objetivos (Target) del mes: OEE: {t['OEE']}% | Disp: {t['DISP']}% | Perf: {t['PERF']}% | Cal: {t['CAL']}%"
+    else:
+        return "📌 Objetivos por defecto: OEE: 75.0% | Disp: 88.0% | Perf: 90.0% | Cal: 95.0%"
+
+
 # ==========================================
 # 5.B. MOTOR GENERADOR DEL PDF PRINCIPAL 
 # ==========================================
-def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw, p_tipo, df_trend, df_metrics_pdf, df_horarios, df_metrics_std_pdf, df_piezas_excluidas):
+def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw, p_tipo, df_trend, df_metrics_pdf, df_horarios, df_metrics_std_pdf, df_piezas_excluidas, mes=None):
     
     if area_req == "ESTAMPADO":
         theme_color = (15, 76, 129); comp_color = (52, 152, 219)  
@@ -588,7 +657,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
     
     grupos_area = sorted(list(set(df_pdf['Grupo_Máquina'].tolist() + df_prod_pdf['Grupo_Máquina'].tolist() + df_m_pdf['Grupo_Máquina'].tolist())))
 
-    pdf = ReportePDF(area_req, label_reporte, theme_color)
+    pdf = ReportePDF(area_req, label_reporte, theme_color, mes=mes)
     pdf.set_auto_page_break(auto=True, margin=15); pdf.add_page()
     
     links_resumen_grupo = {g: pdf.add_link() for g in grupos_area}
@@ -635,6 +704,14 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
 
         # 1. RESUMEN OEE
         check_space(pdf, 30); print_section_title(pdf, "1. Resumen OEE del Grupo", theme_color)
+        
+        # --- LEYENDA OBJETIVOS DEL MES ---
+        leyenda_obj = obtener_leyenda_objetivos(mes, area_req)
+        pdf.set_font("Arial", 'B', 9)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 5, clean_text(leyenda_obj), ln=True)
+        pdf.ln(2)
+        # ---------------------------------
         
         piezas_excluidas_grupo = df_piezas_excluidas[df_piezas_excluidas['Máquina'].isin(maq_del_grupo)]['Code'].unique() if not df_piezas_excluidas.empty else []
         is_h_active = len(piezas_excluidas_grupo) > 0
@@ -789,7 +866,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         pdf.cell(38, 5, clean_text(mins_to_duration_str(t_proy_g)), border=1, align='C')
         pdf.cell(38, 5, clean_text(mins_to_duration_str(t_desc_g)), border=1, align='C', ln=True); pdf.ln(4)
 
-        # Análisis de Fallas y Tendencias Visual (SOLO GRÁFICOS DE BARRAS Y LÍNEAS)
+        # Análisis de Fallas y Tendencias Visual
         check_space(pdf, 170)
         print_section_title(pdf, "Análisis de Fallas y Tendencias", theme_color)
 
@@ -872,9 +949,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 pdf.set_xy(x_p, y_p + row_h); fill_t = not fill_t
             pdf.ln(5)
 
-        # ---------------------------------------------------------
         # Producción (Gráfico y Tabla Top 5 Códigos)
-        # ---------------------------------------------------------
         df_prod_g = df_prod_pdf[df_prod_pdf['Máquina'].isin(maq_del_grupo)]
         if not df_prod_g.empty:
             check_space(pdf, 75); print_section_title(pdf, "Desglose de Producción", theme_color)
@@ -953,7 +1028,6 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                     pdf.cell(85, 6, "Maquinas Operadas", 1, 0, 'C', True); pdf.cell(20, 6, "Perf.", 1, 1, 'C', True)
                     setup_table_row(pdf); pdf.set_font("Arial", '', 9)
 
-                # CORRECCIÓN PARA EL PORCENTAJE
                 perf_val_raw = row['PERFORMANCE']
                 if pd.isna(perf_val_raw): perf_v = 0
                 elif perf_val_raw > 10: perf_v = int(round(perf_val_raw))
@@ -1082,24 +1156,24 @@ with contenedor_botones:
     with col_btn1:
         if st.button("Reporte ESTAMPADO (Azul)", use_container_width=True):
             with st.spinner("Generando PDF Estampado..."):
-                pdf_data = crear_pdf("ESTAMPADO", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas)
+                pdf_data = crear_pdf("ESTAMPADO", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas, mes=pdf_mes_real)
                 st.download_button("📥 Descargar", data=pdf_data, file_name=f"Estampado_{file_label}.pdf", mime="application/pdf", use_container_width=True)
 
     with col_btn2:
         if st.button("Reporte SOLD. NUEVA (Naranja)", use_container_width=True):
             with st.spinner("Generando PDF Soldadura Nueva..."):
-                pdf_data = crear_pdf("SOLDADURA NUEVA", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas)
+                pdf_data = crear_pdf("SOLDADURA NUEVA", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas, mes=pdf_mes_real)
                 st.download_button("📥 Descargar", data=pdf_data, file_name=f"Soldadura_Nueva_{file_label}.pdf", mime="application/pdf", use_container_width=True)
 
     with col_btn3:
         if st.button("Reporte SOLD. FUMIS (Violeta)", use_container_width=True):
             with st.spinner("Generando PDF Soldadura Fumis..."):
-                pdf_data = crear_pdf("SOLDADURA FUMIS", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas)
+                pdf_data = crear_pdf("SOLDADURA FUMIS", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas, mes=pdf_mes_real)
                 st.download_button("📥 Descargar", data=pdf_data, file_name=f"Soldadura_Fumis_{file_label}.pdf", mime="application/pdf", use_container_width=True)
 
     if pdf_tipo == "Mensual":
         with col_btn4:
             if st.button("Resumen Ejecutivo", use_container_width=True):
                 with st.spinner("Generando Resumen..."):
-                    pdf_resumen = crear_pdf_resumen_ejecutivo(pdf_label, df_trend, df_metrics, df_metrics_std, df_piezas_excluidas)
+                    pdf_resumen = crear_pdf_resumen_ejecutivo(pdf_label, df_trend, df_metrics, df_metrics_std, df_piezas_excluidas, mes=pdf_mes_real)
                     st.download_button("📥 Descargar", data=pdf_resumen, file_name=f"Resumen_Ejecutivo_{file_label}.pdf", mime="application/pdf", use_container_width=True)
