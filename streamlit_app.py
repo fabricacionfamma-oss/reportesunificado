@@ -124,9 +124,10 @@ def run_query_safe(conn, query):
 def fix_percentages(df):
     if not df.empty and 'OEE' in df.columns and df['OEE'].max() > 1.5:
         df['OEE'] = df['OEE'] / 100.0
-        df['DISPONIBILIDAD'] = df['DISPONIBILIDAD'] / 100.0
-        df['PERFORMANCE'] = df['PERFORMANCE'] / 100.0
-        df['CALIDAD'] = df['CALIDAD'] / 100.0
+        # Validación inteligente de columnas para evitar el KeyError
+        for col in ['DISPONIBILIDAD', 'PERFORMANCE', 'CALIDAD']:
+            if col in df.columns:
+                df[col] = df[col] / 100.0
     return df
 
 @st.cache_data(ttl=300)
@@ -439,19 +440,12 @@ def print_pdf_metric_row(pdf, prefix, m, m_std=None):
     set_pdf_color_metric(pdf, m.get('CALIDAD', 0)*100, 'CALIDAD'); pdf.write(7, f"{m.get('CALIDAD', 0)*100:.1f}%")
     pdf.set_text_color(0, 0, 0); pdf.ln(7)
 
-    if m_std is not None and m_std.get('OEE', 0) != m.get('OEE', 0):
-        pdf.set_font("Arial", 'I', 8); pdf.set_text_color(120, 120, 120)
-        pdf.cell(10)
-        pdf.write(5, clean_text(f"(Usual c/ Piezas H - OEE: {m_std.get('OEE', 0)*100:.1f}% | Disp: {m_std.get('DISPONIBILIDAD', 0)*100:.1f}% | Perf: {m_std.get('PERFORMANCE', 0)*100:.1f}% | Cal: {m_std.get('CALIDAD', 0)*100:.1f}%)"))
-        pdf.ln(5)
-
 def add_image_safe(pdf, img_path, w_mm, h_mm, center=True):
     if pdf.get_y() + h_mm > 275: pdf.add_page()
     x = (210 - w_mm) / 2 if center else pdf.get_x()
     y = pdf.get_y()
     pdf.image(img_path, x=x, y=y, w=w_mm)
     pdf.set_y(y + h_mm + 5)
-
 
 # ==========================================
 # 5.A. MOTOR PARA RESUMEN EJECUTIVO
@@ -582,7 +576,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
     elif area_req == "SOLDADURA NUEVA":
         theme_color = (211, 84, 0); comp_color = (230, 126, 34) 
         chart_bars = ['#993300', '#E67E22', '#FAD7A1']
-    else: # SOLDADURA FUMIS
+    else: 
         theme_color = (142, 68, 173); comp_color = (165, 105, 189)
         chart_bars = ['#5B2C6F', '#A569BD', '#D7BDE2']
         
@@ -859,10 +853,8 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 row_h = max(1, len(top3)) * 5 
                 if pdf.get_y() + row_h > 265: pdf.add_page(); draw_head_maq(); setup_table_row(pdf); pdf.set_font("Arial", '', 7)
                 
-                if fill_t:
-                    pdf.set_fill_color(235, 243, 250)
-                else:
-                    pdf.set_fill_color(255, 255, 255)
+                if fill_t: pdf.set_fill_color(235, 243, 250)
+                else: pdf.set_fill_color(255, 255, 255)
 
                 x_p, y_p = pdf.get_x(), pdf.get_y()
                 pdf.cell(25, row_h, clean_text(maq)[:15], 1, 0, 'C', True)
@@ -961,14 +953,11 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                     pdf.cell(85, 6, "Maquinas Operadas", 1, 0, 'C', True); pdf.cell(20, 6, "Perf.", 1, 1, 'C', True)
                     setup_table_row(pdf); pdf.set_font("Arial", '', 9)
 
-                # CORRECCIÓN PARA EL PORCENTAJE (Para evitar 26399%)
+                # CORRECCIÓN PARA EL PORCENTAJE
                 perf_val_raw = row['PERFORMANCE']
-                if pd.isna(perf_val_raw):
-                    perf_v = 0
-                elif perf_val_raw > 10: 
-                    perf_v = int(round(perf_val_raw))
-                else:
-                    perf_v = int(round(perf_val_raw * 100))
+                if pd.isna(perf_val_raw): perf_v = 0
+                elif perf_val_raw > 10: perf_v = int(round(perf_val_raw))
+                else: perf_v = int(round(perf_val_raw * 100))
 
                 op_name = clean_text(str(row['Operador']))[:28]
                 mq = ", ".join(sorted(list(op_m.get(op_name, set())))) if op_name in op_m else "-"
@@ -1034,16 +1023,20 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 pdf.cell(50, 5, " " + clean_text(r['Operador'])[:25], 'B')
                 pdf.cell(35, 5, " " + clean_text(str(r['Fábrica']))[:18], 'B')
                 
-                if is_over: pdf.set_text_color(220, 20, 20)
-                else: pdf.set_text_color(50, 50, 50)
+                if is_over:
+                    pdf.set_text_color(220, 20, 20)
+                else:
+                    pdf.set_text_color(50, 50, 50)
                 
                 pdf.cell(35, 5, f"{r['Minutos']:.1f}", 'B', 0, 'C')
                 
                 pdf.set_text_color(50, 50, 50)
                 pdf.cell(35, 5, str(int(r['Cantidad'])), 'B', 0, 'C')
                 
-                if is_over: pdf.set_text_color(220, 20, 20)
-                else: pdf.set_text_color(50, 50, 50)
+                if is_over:
+                    pdf.set_text_color(220, 20, 20)
+                else:
+                    pdf.set_text_color(50, 50, 50)
                 
                 pdf.cell(35, 5, f"{r['Promedio']:.1f}", 'B', 1, 'C')
                 pdf.set_text_color(50, 50, 50) 
