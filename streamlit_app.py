@@ -639,16 +639,16 @@ def get_dt_targets(mes, area, category):
         mes = 9 
     targets = {
         9: {
-            'ESTAMPADO': {'Manten.': (3.0, 2.5), 'Matric.': (7.0, 5.0), 'Tecnol.': (2.0, 1.0), 'Logist.': (2.0, 1.5), 'Gestion': (2.0, 1.5)},
-            'SOLDADURA': {'Manten.': (2.0, 1.0), 'Matric.': (4.5, 3.0), 'Tecnol.': (4.5, 3.0), 'Logist.': (2.5, 1.5), 'Gestion': (2.0, 1.5)}
+            'ESTAMPADO': {'Mantenimiento': (3.0, 2.5), 'Matriceria': (7.0, 5.0), 'Tecnologia': (2.0, 1.0), 'Logistica': (2.0, 1.5), 'Gestion': (2.0, 1.5)},
+            'SOLDADURA': {'Mantenimiento': (2.0, 1.0), 'Dispositivo': (4.5, 3.0), 'Tecnologia': (4.5, 3.0), 'Logistica': (2.5, 1.5), 'Gestion': (2.0, 1.5)}
         },
         10: {
-            'ESTAMPADO': {'Manten.': (3.0, 2.5), 'Matric.': (5.0, 4.0), 'Tecnol.': (2.0, 1.0), 'Logist.': (2.0, 1.5), 'Gestion': (2.0, 1.5)},
-            'SOLDADURA': {'Manten.': (2.0, 1.0), 'Matric.': (3.5, 2.0), 'Tecnol.': (3.5, 2.0), 'Logist.': (2.5, 1.5), 'Gestion': (2.0, 1.5)}
+            'ESTAMPADO': {'Mantenimiento': (3.0, 2.5), 'Matriceria': (5.0, 4.0), 'Tecnologia': (2.0, 1.0), 'Logistica': (2.0, 1.5), 'Gestion': (2.0, 1.5)},
+            'SOLDADURA': {'Mantenimiento': (2.0, 1.0), 'Dispositivo': (3.5, 2.0), 'Tecnologia': (3.5, 2.0), 'Logistica': (2.5, 1.5), 'Gestion': (2.0, 1.5)}
         },
         11: {
-            'ESTAMPADO': {'Manten.': (3.0, 2.5), 'Matric.': (2.5, 2.0), 'Tecnol.': (0.5, 0.25), 'Logist.': (2.0, 1.5), 'Gestion': (2.0, 1.5)},
-            'SOLDADURA': {'Manten.': (1.5, 1.0), 'Matric.': (2.25, 1.75), 'Tecnol.': (2.25, 1.75), 'Logist.': (2.0, 1.5), 'Gestion': (2.0, 1.5)}
+            'ESTAMPADO': {'Mantenimiento': (3.0, 2.5), 'Matriceria': (2.5, 2.0), 'Tecnologia': (0.5, 0.25), 'Logistica': (2.0, 1.5), 'Gestion': (2.0, 1.5)},
+            'SOLDADURA': {'Mantenimiento': (1.5, 1.0), 'Dispositivo': (2.25, 1.75), 'Tecnologia': (2.25, 1.75), 'Logistica': (2.0, 1.5), 'Gestion': (2.0, 1.5)}
         }
     }
     return targets[mes][area_grp].get(category, (0.0, 0.0))
@@ -972,52 +972,57 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         check_space(pdf, 45)
         print_section_title(pdf, "Distribución de Down Time por Área", theme_color)
         
+        is_estampado = 'ESTAMPADO' in area_req.upper()
+        col_disp_mat = 'Matriceria' if is_estampado else 'Dispositivo'
+        lbl_disp_mat = 'MATRIC.' if is_estampado else 'DISPOSIT.'
+
         df_fallas_area = df_pdf_g[df_pdf_g['Estado_Global'] == 'Falla/Gestión'].copy()
         if not df_fallas_area.empty:
             def clasificar_area_dt(row):
                 cols = [c for c in df_fallas_area.columns if 'Nivel Evento' in c]
                 niveles = " ".join([str(row.get(c, '')) for c in cols]).upper()
-                if 'MANTENIMIENTO' in niveles: return 'Manten.'
-                if 'MATRICERIA' in niveles or 'MATRICERÍA' in niveles or 'DISPOSITIVO' in niveles: return 'Matric.'
-                if 'TECNOLOGIA' in niveles or 'TECNOLOGÍA' in niveles: return 'Tecnol.'
-                if 'LOGISTICA' in niveles or 'LOGÍSTICA' in niveles: return 'Logist.'
+                if 'MANTENIMIENTO' in niveles: return 'Mantenimiento'
+                if 'MATRICERIA' in niveles or 'MATRICERÍA' in niveles or 'DISPOSITIVO' in niveles: return col_disp_mat
+                if 'TECNOLOGIA' in niveles or 'TECNOLOGÍA' in niveles: return 'Tecnologia'
+                if 'LOGISTICA' in niveles or 'LOGÍSTICA' in niveles: return 'Logistica'
                 if 'GESTION' in niveles or 'GESTIÓN' in niveles: return 'Gestion'
                 return 'Otros'
             
             df_fallas_area['Area_DT'] = df_fallas_area.apply(clasificar_area_dt, axis=1)
             dt_pivot = df_fallas_area.groupby(['Máquina', 'Area_DT'])['Tiempo (Min)'].sum().unstack(fill_value=0).reset_index()
             
-            for col in ['Manten.', 'Matric.', 'Tecnol.', 'Logist.', 'Gestion', 'Otros']:
+            columnas_esperadas = ['Mantenimiento', col_disp_mat, 'Tecnologia', 'Logistica', 'Gestion', 'Otros']
+            for col in columnas_esperadas:
                 if col not in dt_pivot.columns:
                     dt_pivot[col] = 0
             
             def draw_head_dt():
                 setup_table_header(pdf, theme_color)
-                # Row 1
+                # Fila 1 - Titulos
                 pdf.set_font("Arial", 'B', 7)
                 pdf.cell(30, 5, "MAQUINA", 'LTR', 0, 'C', True)
                 pdf.cell(26, 5, "MANTEN.", 'LTR', 0, 'C', True)
-                pdf.cell(26, 5, "MATRIC/DISP", 'LTR', 0, 'C', True)
+                pdf.cell(26, 5, lbl_disp_mat, 'LTR', 0, 'C', True)
                 pdf.cell(26, 5, "TECNOL.", 'LTR', 0, 'C', True)
                 pdf.cell(26, 5, "LOGIST.", 'LTR', 0, 'C', True)
                 pdf.cell(26, 5, "GESTION", 'LTR', 0, 'C', True)
                 pdf.cell(30, 5, "OTROS", 'LTR', 1, 'C', True)
                 
-                # Row 2 (TRG)
+                # Fila 2 - TRG Target
                 pdf.set_font("Arial", '', 6)
                 pdf.cell(30, 4, "", 'LR', 0, 'C', True)
-                for c in ['Manten.', 'Matric.', 'Tecnol.', 'Logist.', 'Gestion']:
+                for c in ['Mantenimiento', col_disp_mat, 'Tecnologia', 'Logistica', 'Gestion']:
                     min_p, trg_p = get_dt_targets(mes, area_req, c)
-                    trg_m = int(round(trg_p * 4.5))
-                    pdf.cell(26, 4, f"TRG: {trg_p}% ({trg_m}m)", 'LR', 0, 'C', True)
+                    trg_m = round(trg_p * 4.5, 1)
+                    pdf.cell(26, 4, f"TRG: {trg_p}% ({trg_m:g}m)", 'LR', 0, 'C', True)
                 pdf.cell(30, 4, "", 'LR', 1, 'C', True)
 
-                # Row 3 (MIN)
+                # Fila 3 - MIN Target
                 pdf.cell(30, 4, "Target vs Real", 'LBR', 0, 'C', True)
-                for c in ['Manten.', 'Matric.', 'Tecnol.', 'Logist.', 'Gestion']:
+                for c in ['Mantenimiento', col_disp_mat, 'Tecnologia', 'Logistica', 'Gestion']:
                     min_p, trg_p = get_dt_targets(mes, area_req, c)
-                    min_m = int(round(min_p * 4.5))
-                    pdf.cell(26, 4, f"MIN: {min_p}% ({min_m}m)", 'LBR', 0, 'C', True)
+                    min_m = round(min_p * 4.5, 1)
+                    pdf.cell(26, 4, f"MIN: {min_p}% ({min_m:g}m)", 'LBR', 0, 'C', True)
                 pdf.cell(30, 4, "", 'LBR', 1, 'C', True)
                 
             draw_head_dt()
@@ -1035,7 +1040,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 pdf.set_text_color(50, 50, 50)
                 pdf.cell(30, 6, " " + clean_text(maq)[:15], 1, 0, 'L', True)
                 
-                for c in ['Manten.', 'Matric.', 'Tecnol.', 'Logist.', 'Gestion']:
+                for c in ['Mantenimiento', col_disp_mat, 'Tecnologia', 'Logistica', 'Gestion']:
                     dt_min = r_dt.get(c, 0)
                     real_p = (dt_min / t_plan * 100) if t_plan > 0 else 0
                     min_p, trg_p = get_dt_targets(mes, area_req, c)
