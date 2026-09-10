@@ -608,7 +608,7 @@ def crear_pdf_resumen_ejecutivo(fecha_str, df_trend, df_metrics_pdf, df_metrics_
 
 def obtener_leyenda_objetivos(mes, area):
     if area == 'GLOBAL PLANTAS':
-        return "📌 Objetivos por defecto: OEE: 75.0% | Disp: 88.0% | Perf: 90.0% | Cal: 95.0%"
+        return "Objetivos por defecto: OEE: 75.0% | Disp: 88.0% | Perf: 90.0% | Cal: 95.0%"
 
     area_grp = 'ESTAMPADO' if 'ESTAMPADO' in area.upper() else 'SOLDADURA'
     
@@ -629,10 +629,29 @@ def obtener_leyenda_objetivos(mes, area):
     
     if mes in obj_map:
         t = obj_map[mes][area_grp]
-        return f"📌 Objetivos (Target) del mes: OEE: {t['OEE']}% | Disp: {t['DISP']}% | Perf: {t['PERF']}% | Cal: {t['CAL']}%"
+        return f"Objetivos (Target) del mes: OEE: {t['OEE']}% | Disp: {t['DISP']}% | Perf: {t['PERF']}% | Cal: {t['CAL']}%"
     else:
-        return "📌 Objetivos por defecto: OEE: 75.0% | Disp: 88.0% | Perf: 90.0% | Cal: 95.0%"
+        return "Objetivos por defecto: OEE: 75.0% | Disp: 88.0% | Perf: 90.0% | Cal: 95.0%"
 
+def get_dt_targets(mes, area, category):
+    area_grp = 'ESTAMPADO' if 'ESTAMPADO' in area.upper() else 'SOLDADURA'
+    if mes not in [9, 10, 11]: 
+        mes = 9 
+    targets = {
+        9: {
+            'ESTAMPADO': {'Manten.': (3.0, 2.5), 'Matric.': (7.0, 5.0), 'Tecnol.': (2.0, 1.0), 'Logist.': (2.0, 1.5), 'Gestion': (2.0, 1.5)},
+            'SOLDADURA': {'Manten.': (2.0, 1.0), 'Matric.': (4.5, 3.0), 'Tecnol.': (4.5, 3.0), 'Logist.': (2.5, 1.5), 'Gestion': (2.0, 1.5)}
+        },
+        10: {
+            'ESTAMPADO': {'Manten.': (3.0, 2.5), 'Matric.': (5.0, 4.0), 'Tecnol.': (2.0, 1.0), 'Logist.': (2.0, 1.5), 'Gestion': (2.0, 1.5)},
+            'SOLDADURA': {'Manten.': (2.0, 1.0), 'Matric.': (3.5, 2.0), 'Tecnol.': (3.5, 2.0), 'Logist.': (2.5, 1.5), 'Gestion': (2.0, 1.5)}
+        },
+        11: {
+            'ESTAMPADO': {'Manten.': (3.0, 2.5), 'Matric.': (2.5, 2.0), 'Tecnol.': (0.5, 0.25), 'Logist.': (2.0, 1.5), 'Gestion': (2.0, 1.5)},
+            'SOLDADURA': {'Manten.': (1.5, 1.0), 'Matric.': (2.25, 1.75), 'Tecnol.': (2.25, 1.75), 'Logist.': (2.0, 1.5), 'Gestion': (2.0, 1.5)}
+        }
+    }
+    return targets[mes][area_grp].get(category, (0.0, 0.0))
 
 # ==========================================
 # 5.B. MOTOR GENERADOR DEL PDF PRINCIPAL 
@@ -948,6 +967,95 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                     pdf.cell(68, 4, clean_text(f_str), 0, 0, 'L')
                 pdf.set_xy(x_p, y_p + row_h); fill_t = not fill_t
             pdf.ln(5)
+
+        # --- NUEVA SECCIÓN: DOWN TIME POR ÁREA ---
+        check_space(pdf, 45)
+        print_section_title(pdf, "Distribución de Down Time por Área", theme_color)
+        
+        df_fallas_area = df_pdf_g[df_pdf_g['Estado_Global'] == 'Falla/Gestión'].copy()
+        if not df_fallas_area.empty:
+            def clasificar_area_dt(row):
+                cols = [c for c in df_fallas_area.columns if 'Nivel Evento' in c]
+                niveles = " ".join([str(row.get(c, '')) for c in cols]).upper()
+                if 'MANTENIMIENTO' in niveles: return 'Manten.'
+                if 'MATRICERIA' in niveles or 'MATRICERÍA' in niveles or 'DISPOSITIVO' in niveles: return 'Matric.'
+                if 'TECNOLOGIA' in niveles or 'TECNOLOGÍA' in niveles: return 'Tecnol.'
+                if 'LOGISTICA' in niveles or 'LOGÍSTICA' in niveles: return 'Logist.'
+                if 'GESTION' in niveles or 'GESTIÓN' in niveles: return 'Gestion'
+                return 'Otros'
+            
+            df_fallas_area['Area_DT'] = df_fallas_area.apply(clasificar_area_dt, axis=1)
+            dt_pivot = df_fallas_area.groupby(['Máquina', 'Area_DT'])['Tiempo (Min)'].sum().unstack(fill_value=0).reset_index()
+            
+            for col in ['Manten.', 'Matric.', 'Tecnol.', 'Logist.', 'Gestion', 'Otros']:
+                if col not in dt_pivot.columns:
+                    dt_pivot[col] = 0
+            
+            def draw_head_dt():
+                setup_table_header(pdf, theme_color)
+                # Row 1
+                pdf.set_font("Arial", 'B', 7)
+                pdf.cell(30, 5, "MAQUINA", 'LTR', 0, 'C', True)
+                pdf.cell(26, 5, "MANTEN.", 'LTR', 0, 'C', True)
+                pdf.cell(26, 5, "MATRIC/DISP", 'LTR', 0, 'C', True)
+                pdf.cell(26, 5, "TECNOL.", 'LTR', 0, 'C', True)
+                pdf.cell(26, 5, "LOGIST.", 'LTR', 0, 'C', True)
+                pdf.cell(26, 5, "GESTION", 'LTR', 0, 'C', True)
+                pdf.cell(30, 5, "OTROS", 'LTR', 1, 'C', True)
+                
+                # Row 2 (TRG)
+                pdf.set_font("Arial", '', 6)
+                pdf.cell(30, 4, "", 'LR', 0, 'C', True)
+                for c in ['Manten.', 'Matric.', 'Tecnol.', 'Logist.', 'Gestion']:
+                    min_p, trg_p = get_dt_targets(mes, area_req, c)
+                    trg_m = int(round(trg_p * 4.5))
+                    pdf.cell(26, 4, f"TRG: {trg_p}% ({trg_m}m)", 'LR', 0, 'C', True)
+                pdf.cell(30, 4, "", 'LR', 1, 'C', True)
+
+                # Row 3 (MIN)
+                pdf.cell(30, 4, "Target vs Real", 'LBR', 0, 'C', True)
+                for c in ['Manten.', 'Matric.', 'Tecnol.', 'Logist.', 'Gestion']:
+                    min_p, trg_p = get_dt_targets(mes, area_req, c)
+                    min_m = int(round(min_p * 4.5))
+                    pdf.cell(26, 4, f"MIN: {min_p}% ({min_m}m)", 'LBR', 0, 'C', True)
+                pdf.cell(30, 4, "", 'LBR', 1, 'C', True)
+                
+            draw_head_dt()
+            setup_table_row(pdf); pdf.set_font("Arial", 'B', 7); fill_dt = False
+            for _, r_dt in dt_pivot.iterrows():
+                maq = r_dt['Máquina']
+                t_plan = maquinas_metricas.get(maq, {}).get('T_Planificado', 0)
+                
+                if pdf.get_y() > 265: 
+                    pdf.add_page(); draw_head_dt(); setup_table_row(pdf); pdf.set_font("Arial", 'B', 7)
+                
+                if fill_dt: pdf.set_fill_color(235, 243, 250)
+                else: pdf.set_fill_color(255, 255, 255)
+                
+                pdf.set_text_color(50, 50, 50)
+                pdf.cell(30, 6, " " + clean_text(maq)[:15], 1, 0, 'L', True)
+                
+                for c in ['Manten.', 'Matric.', 'Tecnol.', 'Logist.', 'Gestion']:
+                    dt_min = r_dt.get(c, 0)
+                    real_p = (dt_min / t_plan * 100) if t_plan > 0 else 0
+                    min_p, trg_p = get_dt_targets(mes, area_req, c)
+                    
+                    if real_p <= trg_p: pdf.set_text_color(33, 195, 84) # Verde
+                    elif real_p <= min_p: pdf.set_text_color(220, 140, 0) # Amarillo/Ámbar
+                    else: pdf.set_text_color(220, 20, 20) # Rojo
+                    
+                    pdf.cell(26, 6, f"{real_p:.1f}% ({int(dt_min)}m)", 1, 0, 'C', True)
+                    
+                pdf.set_text_color(50, 50, 50)
+                dt_otros = r_dt.get('Otros', 0)
+                otros_p = (dt_otros / t_plan * 100) if t_plan > 0 else 0
+                pdf.cell(30, 6, f"{otros_p:.1f}% ({int(dt_otros)}m)", 1, 1, 'C', True)
+                
+                fill_dt = not fill_dt
+            pdf.ln(5)
+        else:
+            pdf.set_font("Arial", 'I', 10); pdf.cell(0, 10, clean_text("No hay registros de fallas para desglosar por área."), ln=True)
+        # ------------------------------------------
 
         # Producción (Gráfico y Tabla Top 5 Códigos)
         df_prod_g = df_prod_pdf[df_prod_pdf['Máquina'].isin(maq_del_grupo)]
