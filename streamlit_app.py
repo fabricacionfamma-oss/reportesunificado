@@ -364,15 +364,25 @@ with st.container():
 with st.spinner("Extrayendo y unificando información..."):
     df_raw, pdf_df_prod_target, pdf_df_op_target, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas = fetch_data_from_db(pdf_ini, pdf_fin, pdf_tipo, mes=pdf_mes, anio=pdf_anio, lista_piezas_h=lista_piezas_h)
 
+# --- CORRECCIÓN: Manejo seguro de DataFrames vacíos para evitar KeyError ---
 if not df_metrics.empty:
     df_metrics['Grupo_Máquina'] = df_metrics['Máquina'].apply(asignar_grupo_dinamico)
     df_metrics['Area_Principal'] = df_metrics['Grupo_Máquina'].apply(asignar_area_principal)
+else:
+    df_metrics = pd.DataFrame(columns=['Máquina', 'Grupo_Máquina', 'Area_Principal', 'OEE', 'DISPONIBILIDAD', 'PERFORMANCE', 'CALIDAD'])
+
 if not df_raw.empty:
     df_raw['Grupo_Máquina'] = df_raw['Máquina'].apply(asignar_grupo_dinamico)
     df_raw['Area_Principal'] = df_raw['Grupo_Máquina'].apply(asignar_area_principal)
+else:
+    df_raw = pd.DataFrame(columns=['Máquina', 'Grupo_Máquina', 'Area_Principal', 'Estado_Global', 'Tiempo (Min)', 'Detalle_Final'])
+
 if not pdf_df_prod_target.empty:
     pdf_df_prod_target['Grupo_Máquina'] = pdf_df_prod_target['Máquina'].apply(asignar_grupo_dinamico)
     pdf_df_prod_target['Area_Principal'] = pdf_df_prod_target['Grupo_Máquina'].apply(asignar_area_principal)
+else:
+    pdf_df_prod_target = pd.DataFrame(columns=['Máquina', 'Grupo_Máquina', 'Area_Principal', 'Código', 'Buenas', 'Retrabajo', 'Observadas', 'TC'])
+# -------------------------------------------------------------------------
 
 # ==========================================
 # 4. FUNCIONES HELPER PDF
@@ -670,9 +680,11 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         
     hex_theme = '#%02x%02x%02x' % theme_color; hex_comp = '#%02x%02x%02x' % comp_color  
 
-    df_pdf = df_pdf_raw[df_pdf_raw['Area_Principal'] == area_req].copy() if not df_pdf_raw.empty else pd.DataFrame()
-    df_prod_pdf = prod_target_df[prod_target_df['Area_Principal'] == area_req].copy() if not prod_target_df.empty else pd.DataFrame()
-    df_m_pdf = df_metrics_pdf[df_metrics_pdf['Area_Principal'] == area_req].copy() if not df_metrics_pdf.empty else pd.DataFrame()
+    # --- CORRECCIÓN: Mantener columnas si el DataFrame queda vacío tras el filtro ---
+    df_pdf = df_pdf_raw[df_pdf_raw['Area_Principal'] == area_req].copy() if not df_pdf_raw.empty else pd.DataFrame(columns=df_pdf_raw.columns)
+    df_prod_pdf = prod_target_df[prod_target_df['Area_Principal'] == area_req].copy() if not prod_target_df.empty else pd.DataFrame(columns=prod_target_df.columns)
+    df_m_pdf = df_metrics_pdf[df_metrics_pdf['Area_Principal'] == area_req].copy() if not df_metrics_pdf.empty else pd.DataFrame(columns=df_metrics_pdf.columns)
+    # --------------------------------------------------------------------------------
     
     grupos_area = sorted(list(set(df_pdf['Grupo_Máquina'].tolist() + df_prod_pdf['Grupo_Máquina'].tolist() + df_m_pdf['Grupo_Máquina'].tolist())))
 
