@@ -735,17 +735,22 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         lbl_disp_mat = 'MATRIC.' if is_estampado else 'DISPOSIT.'
 
         if not df_pdf_g.empty:
-            def obtener_area_descriptiva(row):
-                # Extraer directamente desde Wiidem el nombre original (Nivel 1 o 2)
-                for col in ['Nivel Evento 1', 'Nivel Evento 2']:
-                    val = str(row.get(col, '')).strip()
-                    if val and val.lower() not in ['none', 'nan', 'null', '']:
-                        return val.title()
+            def obtener_area_maestra(row):
+                cols = [c for c in df_pdf_g.columns if 'Nivel Evento' in c]
+                niveles_str = " ".join([str(row.get(c, '')) for c in cols]).upper()
+                
+                if 'MANTENIMIENTO' in niveles_str: return 'Mantenimiento'
+                if 'MATRICERIA' in niveles_str or 'MATRICERÍA' in niveles_str: return 'Matriceria'
+                if 'DISPOSITIVO' in niveles_str: return 'Dispositivo'
+                if 'TECNOLOGIA' in niveles_str or 'TECNOLOGÍA' in niveles_str: return 'Tecnologia'
+                if 'LOGISTICA' in niveles_str or 'LOGÍSTICA' in niveles_str: return 'Logistica'
+                if 'GESTION' in niveles_str or 'GESTIÓN' in niveles_str: return 'Gestion'
+                if 'CALIDAD' in niveles_str: return 'Calidad'
                 return 'General'
 
-            df_pdf_g['Area_Desc'] = df_pdf_g.apply(obtener_area_descriptiva, axis=1)
-            # Esto crea el texto exacto: "Mantenimiento - Falla sensor" o "Calidad - Pieza mala"
-            df_pdf_g['Falla_Completa'] = df_pdf_g['Area_Desc'].astype(str) + " - " + df_pdf_g['Detalle_Final'].astype(str)
+            df_pdf_g['Area_Maestra'] = df_pdf_g.apply(obtener_area_maestra, axis=1)
+            # Esto crea el texto exacto unificado: "Mantenimiento - Falla sensor" o "Calidad - Pieza mala"
+            df_pdf_g['Falla_Completa'] = df_pdf_g['Area_Maestra'].astype(str) + " - " + df_pdf_g['Detalle_Final'].astype(str)
 
         pdf.add_page(); pdf.set_link(links_resumen_grupo[g]) 
         pdf.set_font("Times", 'B', 16); pdf.set_text_color(*theme_color)
@@ -921,7 +926,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
 
         df_g_fallas = df_pdf_g[df_pdf_g['Estado_Global'] == 'Falla/Gestión'].copy()
         if not df_g_fallas.empty:
-            # === AQUÍ USAMOS 'Falla_Completa' PARA EL GRÁFICO (ej: "Calidad - Pieza mala") ===
+            # === AQUÍ USAMOS 'Falla_Completa' PARA EL GRÁFICO ===
             agg_f15 = df_g_fallas.groupby('Falla_Completa')['Tiempo (Min)'].sum().reset_index().sort_values('Tiempo (Min)', ascending=False).head(15).sort_values('Tiempo (Min)')
             agg_f15['Label'] = agg_f15.apply(lambda r: f" {str(r['Falla_Completa'])[:60]} — {r['Tiempo (Min)']:.0f}m", axis=1)
             max_x = agg_f15['Tiempo (Min)'].max() if not agg_f15.empty else 1
@@ -1001,21 +1006,16 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
             pdf.ln(5)
 
         # --- SECCIÓN: DOWN TIME POR ÁREA ---
-        # SE REEMPLAZA LA COLUMNA 'OTROS' POR 'CALIDAD'
         check_space(pdf, 45)
         print_section_title(pdf, "Distribución de Down Time por Área", theme_color)
         
         df_fallas_area = df_pdf_g[df_pdf_g['Estado_Global'] == 'Falla/Gestión'].copy()
         if not df_fallas_area.empty:
             def clasificar_area_dt_tabla(row):
-                area = str(row['Area_Desc']).upper()
-                if 'MANTENIMIENTO' in area: return 'Mantenimiento'
-                if 'MATRICERIA' in area or 'MATRICERÍA' in area or 'DISPOSITIVO' in area: return col_disp_mat
-                if 'TECNOLOGIA' in area or 'TECNOLOGÍA' in area: return 'Tecnologia'
-                if 'LOGISTICA' in area or 'LOGÍSTICA' in area: return 'Logistica'
-                if 'GESTION' in area or 'GESTIÓN' in area: return 'Gestion'
-                if 'CALIDAD' in area: return 'Calidad'
-                return 'Calidad' # Si existiera un área nueva, la suma a Calidad para no usar "Otros"
+                area = row['Area_Maestra']
+                if area in ['Matriceria', 'Dispositivo']: return col_disp_mat
+                if area == 'General': return 'Calidad' # Enviamos cualquier remanente genérico a Calidad para limpiar la tabla
+                return area
             
             df_fallas_area['Area_DT'] = df_fallas_area.apply(clasificar_area_dt_tabla, axis=1)
             dt_pivot = df_fallas_area.groupby(['Máquina', 'Area_DT'])['Tiempo (Min)'].sum().unstack(fill_value=0).reset_index()
@@ -1027,7 +1027,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
             
             def draw_head_dt():
                 setup_table_header(pdf, theme_color)
-                # Fila 1 - Titulos (SE REMUEVE 'OTROS', SE USA 'CALIDAD')
+                # Fila 1 - Titulos
                 pdf.set_font("Arial", 'B', 7)
                 pdf.cell(30, 5, "MAQUINA", 'LTR', 0, 'C', True)
                 pdf.cell(26, 5, "MANTEN.", 'LTR', 0, 'C', True)
