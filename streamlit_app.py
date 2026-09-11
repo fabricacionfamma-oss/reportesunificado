@@ -27,7 +27,7 @@ MAQUINAS_MAP = {
     "P-015": "MECANICAS", "P-019": "MECANICAS", "P-020": "MECANICAS", "P-021": "MECANICAS", "P-022": "MECANICAS",
     "GOF01": "Gofradora",
 
-    # 🟧 2. ÁREA: SOLDADURA NUEVA (FAMMA + RENAULT FUMISCOR)
+    # 🟧 2. ÁREA: SOLDADURA NAVE 6 (FAMMA + RENAULT FUMISCOR)
     "Cell 13 Famma": "CELDAS FAMMA", "Cell 14 Famma": "CELDAS FAMMA", "Cell 15A Famma": "CELDAS FAMMA", "Cell 15B Famma": "CELDAS FAMMA",
     "Cell 16 Famma": "CELDAS FAMMA", "Cell 17 Famma": "CELDAS FAMMA", "Cell 3 Famma": "CELDAS FAMMA",
     "PRP 1": "PRP FAMMA", "PRP 2": "PRP FAMMA", "PRP 3": "PRP FAMMA",
@@ -62,7 +62,7 @@ def asignar_area_principal(grupo):
     if grupo in ['PRENSAS PROGRESIVAS', 'PRENSAS PROGRESIVAS GRANDES', 'BALANCIN', 'HIDRAULICAS', 'MECANICAS', 'Gofradora', 'LÍNEAS ESTAMPADO FAMMA']:
         return 'ESTAMPADO'
     elif grupo in ['CELDA RENAULT', 'CELDAS FAMMA', 'PRP FAMMA']:
-        return 'SOLDADURA NUEVA'
+        return 'SOLDADURA NAVE 6'
     elif grupo in ['PRP FUMIS', 'DOBLADORA', 'CELDA SOLDADURA FUMIS']:
         return 'SOLDADURA FUMIS'
     return 'OTRO'
@@ -564,10 +564,10 @@ def crear_pdf_resumen_ejecutivo(fecha_str, df_trend, df_metrics_pdf, df_metrics_
         return y_boxes + 5
 
     y_curr = pdf.get_y() + 5
-    for area_name in ['ESTAMPADO', 'SOLDADURA NUEVA', 'SOLDADURA FUMIS']:
+    for area_name in ['ESTAMPADO', 'SOLDADURA NAVE 6', 'SOLDADURA FUMIS']:
         oee, disp, perf, cal = calc_metrics(met_planta, area_name)
         std_mets = calc_metrics(met_planta_std, area_name) if is_h_active else None
-        t_col = (15, 76, 129) if area_name == 'ESTAMPADO' else (211, 84, 0) if area_name == 'SOLDADURA NUEVA' else (142, 68, 173)
+        t_col = (15, 76, 129) if area_name == 'ESTAMPADO' else (211, 84, 0) if area_name == 'SOLDADURA NAVE 6' else (142, 68, 173)
         y_curr = draw_kpi_row(pdf, y_curr, f"INDICADORES: {area_name}", oee, disp, perf, cal, t_col, std_mets, area_name)
         y_curr += 8
 
@@ -661,7 +661,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
     if area_req == "ESTAMPADO":
         theme_color = (15, 76, 129); comp_color = (52, 152, 219)  
         chart_bars = ['#003366', '#3498DB', '#AED6F1']
-    elif area_req == "SOLDADURA NUEVA":
+    elif area_req == "SOLDADURA NAVE 6":
         theme_color = (211, 84, 0); comp_color = (230, 126, 34) 
         chart_bars = ['#993300', '#E67E22', '#FAD7A1']
     else: 
@@ -1267,10 +1267,10 @@ with contenedor_botones:
                 st.download_button("📥 Descargar", data=pdf_data, file_name=f"Estampado_{file_label}.pdf", mime="application/pdf", use_container_width=True)
 
     with col_btn2:
-        if st.button("Reporte SOLD. NUEVA (Naranja)", use_container_width=True):
-            with st.spinner("Generando PDF Soldadura Nueva..."):
-                pdf_data = crear_pdf("SOLDADURA NUEVA", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas, mes=pdf_mes_real)
-                st.download_button("📥 Descargar", data=pdf_data, file_name=f"Soldadura_Nueva_{file_label}.pdf", mime="application/pdf", use_container_width=True)
+        if st.button("Reporte SOLD. NAVE 6 (Naranja)", use_container_width=True):
+            with st.spinner("Generando PDF Soldadura Nave 6..."):
+                pdf_data = crear_pdf("SOLDADURA NAVE 6", pdf_label, pdf_df_op_target, pdf_df_prod_target, df_raw, pdf_tipo, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas, mes=pdf_mes_real)
+                st.download_button("📥 Descargar", data=pdf_data, file_name=f"Soldadura_Nave_6_{file_label}.pdf", mime="application/pdf", use_container_width=True)
 
     with col_btn3:
         if st.button("Reporte SOLD. FUMIS (Violeta)", use_container_width=True):
