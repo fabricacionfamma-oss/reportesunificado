@@ -728,7 +728,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         if df_pdf_g.empty and not any(m in df_prod_pdf['Máquina'].values for m in maq_del_grupo) and not any(m in df_m_pdf['Máquina'].values for m in maq_del_grupo): continue
             
         # ==============================================================
-        # PRE-CALCULAR AREA_DT Y FALLA_COMPLETA PARA TODOS LOS GRÁFICOS
+        # PRE-CALCULAR AREA DE FALLA Y ETIQUETA COMPLETA PARA GRÁFICOS
         # ==============================================================
         is_estampado = 'ESTAMPADO' in area_req.upper()
         col_disp_mat = 'Matriceria' if is_estampado else 'Dispositivo'
@@ -745,9 +745,21 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 if 'GESTION' in niveles or 'GESTIÓN' in niveles: return 'Gestion'
                 return 'Otros'
             
+            def obtener_area_descriptiva(row):
+                area = row['Area_DT']
+                if area != 'Otros': return area
+                # Si es "Otros", buscamos el primer nivel significativo (Ej: "Calidad", "Producción")
+                for col in ['Nivel Evento 2', 'Nivel Evento 3', 'Nivel Evento 1']:
+                    val = str(row.get(col, '')).strip()
+                    if val and val.lower() not in ['none', 'nan', 'null', '']:
+                        return val.title()
+                return 'Otros'
+
+            # Aplicamos la lógica de clasificación
             df_pdf_g['Area_DT'] = df_pdf_g.apply(clasificar_area_dt_global, axis=1)
-            # Concatenamos el área y el detalle para que aparezca "Mantenimiento - Falla sensor"
-            df_pdf_g['Falla_Completa'] = df_pdf_g['Area_DT'].astype(str) + " - " + df_pdf_g['Detalle_Final'].astype(str)
+            df_pdf_g['Area_Desc'] = df_pdf_g.apply(obtener_area_descriptiva, axis=1)
+            # Esto crea el texto: "Mantenimiento - Cambio de Sensor" o "Calidad - Control de Pieza"
+            df_pdf_g['Falla_Completa'] = df_pdf_g['Area_Desc'].astype(str) + " - " + df_pdf_g['Detalle_Final'].astype(str)
 
         pdf.add_page(); pdf.set_link(links_resumen_grupo[g]) 
         pdf.set_font("Times", 'B', 16); pdf.set_text_color(*theme_color)
@@ -923,7 +935,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
 
         df_g_fallas = df_pdf_g[df_pdf_g['Estado_Global'] == 'Falla/Gestión'].copy()
         if not df_g_fallas.empty:
-            # Agrupamos ahora por 'Falla_Completa' para incluir el Área en la leyenda
+            # === AQUÍ USAMOS 'Falla_Completa' PARA EL GRÁFICO ===
             agg_f15 = df_g_fallas.groupby('Falla_Completa')['Tiempo (Min)'].sum().reset_index().sort_values('Tiempo (Min)', ascending=False).head(15).sort_values('Tiempo (Min)')
             agg_f15['Label'] = agg_f15.apply(lambda r: f" {str(r['Falla_Completa'])[:60]} — {r['Tiempo (Min)']:.0f}m", axis=1)
             max_x = agg_f15['Tiempo (Min)'].max() if not agg_f15.empty else 1
@@ -937,7 +949,6 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
             pdf.cell(95, 6, clean_text("> Top 15 Fallas:"), 0, 0, 'L'); pdf.cell(95, 6, clean_text("> Tendencia Fallas:"), 0, 1, 'L')
             
             y_bg = pdf.get_y()
-            # Actualizado y='Falla_Completa'
             fig_top15 = px.bar(agg_f15, x='Tiempo (Min)', y='Falla_Completa', orientation='h', text='Label')
             fig_top15.update_traces(marker_color=hex_comp, textposition='outside', textfont=dict(size=11, color='black'), cliponaxis=False)
             fig_top15.update_layout(height=250, width=450, margin=dict(t=5, b=5, l=10, r=220), plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(visible=False, range=[0, max_x * 1.5]), yaxis=dict(title='', showticklabels=False))
@@ -977,7 +988,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 top3 = []
                 df_mf = df_maq[df_maq['Estado_Global'] == 'Falla/Gestión']
                 if not df_mf.empty:
-                    # Agrupamos por Falla_Completa para mostrar en la tabla el Área también
+                    # === AQUÍ USAMOS 'Falla_Completa' PARA EL TOP 3 ===
                     for _, r in df_mf.groupby('Falla_Completa')['Tiempo (Min)'].sum().reset_index().sort_values('Tiempo (Min)', ascending=False).head(3).iterrows():
                         top3.append(f"- {str(r['Falla_Completa']).strip()[:42]} ({r['Tiempo (Min)']:.0f}m)")
                 
@@ -1009,7 +1020,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         
         df_fallas_area = df_pdf_g[df_pdf_g['Estado_Global'] == 'Falla/Gestión'].copy()
         if not df_fallas_area.empty:
-            # Como Area_DT ya fue precalculado arriba, solo agrupamos directamente
+            # Area_DT ya fue precalculado arriba, hacemos pivot directo
             dt_pivot = df_fallas_area.groupby(['Máquina', 'Area_DT'])['Tiempo (Min)'].sum().unstack(fill_value=0).reset_index()
             
             columnas_esperadas = ['Mantenimiento', col_disp_mat, 'Tecnologia', 'Logistica', 'Gestion', 'Otros']
@@ -1078,6 +1089,19 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 pdf.cell(30, 6, f"{otros_p:.1f}% ({int(dt_otros)}m)", 1, 1, 'C', True)
                 
                 fill_dt = not fill_dt
+            
+            # --- NUEVO: LEYENDA EXPLICATIVA DE "OTROS" PARA LA TABLA ---
+            df_otros = df_fallas_area[df_fallas_area['Area_DT'] == 'Otros']
+            if not df_otros.empty:
+                resumen_otros = df_otros.groupby('Area_Desc')['Tiempo (Min)'].sum().sort_values(ascending=False)
+                resumen_otros = resumen_otros[resumen_otros > 0]
+                if not resumen_otros.empty:
+                    desc_str = " | ".join([f"{k}: {int(v)}m" for k, v in resumen_otros.items()])
+                    pdf.ln(1)
+                    pdf.set_font("Arial", 'I', 7)
+                    pdf.set_text_color(100, 100, 100)
+                    pdf.multi_cell(0, 4, clean_text(f"* El tiempo en 'OTROS' se compone de: {desc_str}"))
+
             pdf.ln(5)
         else:
             pdf.set_font("Arial", 'I', 10); pdf.cell(0, 10, clean_text("No hay registros de fallas para desglosar por área."), ln=True)
