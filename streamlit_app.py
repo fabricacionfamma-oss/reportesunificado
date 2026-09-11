@@ -150,7 +150,6 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
                 q_exc = f"SELECT DISTINCT c.Name as Máquina, pr.Code FROM PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Month = {mes} AND p.Year = {anio} AND pr.Code IN ({piezas_str})"
                 df_piezas_excluidas = pd.concat([run_query_safe(conn_famma, q_exc), run_query_safe(conn_fumiscor, q_exc)], ignore_index=True)
 
-            # AQUI ACTUALIZAMOS CON CycleTime EN LUGAR DE IdealCycleTime
             q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, MAX(p.CycleTime) as TC FROM PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Month = {mes} AND p.Year = {anio} {prod_where} GROUP BY c.Name, pr.Code"
             tb_prod = "PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId" if lista_piezas_h else "PROD_M_03 p JOIN CELL c ON p.CellId = c.CellId"
             
@@ -168,7 +167,6 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
                 q_exc = f"SELECT DISTINCT c.Name as Máquina, pr.Code FROM PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' AND pr.Code IN ({piezas_str})"
                 df_piezas_excluidas = pd.concat([run_query_safe(conn_famma, q_exc), run_query_safe(conn_fumiscor, q_exc)], ignore_index=True)
 
-            # AQUI ACTUALIZAMOS CON CycleTime EN LUGAR DE IdealCycleTime
             q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, MAX(p.CycleTime) as TC FROM PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' {prod_where} GROUP BY c.Name, pr.Code"
             tb_prod = "PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId" if lista_piezas_h else "PROD_D_03 p JOIN CELL c ON p.CellId = c.CellId"
             
@@ -366,7 +364,7 @@ with st.container():
 with st.spinner("Extrayendo y unificando información..."):
     df_raw, pdf_df_prod_target, pdf_df_op_target, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas = fetch_data_from_db(pdf_ini, pdf_fin, pdf_tipo, mes=pdf_mes, anio=pdf_anio, lista_piezas_h=lista_piezas_h)
 
-# --- CORRECCIÓN: Manejo seguro de DataFrames vacíos para evitar KeyError ---
+# --- Manejo seguro de DataFrames vacíos para evitar KeyError ---
 if not df_metrics.empty:
     df_metrics['Grupo_Máquina'] = df_metrics['Máquina'].apply(asignar_grupo_dinamico)
     df_metrics['Area_Principal'] = df_metrics['Grupo_Máquina'].apply(asignar_area_principal)
@@ -682,11 +680,9 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         
     hex_theme = '#%02x%02x%02x' % theme_color; hex_comp = '#%02x%02x%02x' % comp_color  
 
-    # --- CORRECCIÓN: Mantener columnas si el DataFrame queda vacío tras el filtro ---
     df_pdf = df_pdf_raw[df_pdf_raw['Area_Principal'] == area_req].copy() if not df_pdf_raw.empty else pd.DataFrame(columns=df_pdf_raw.columns)
     df_prod_pdf = prod_target_df[prod_target_df['Area_Principal'] == area_req].copy() if not prod_target_df.empty else pd.DataFrame(columns=prod_target_df.columns)
     df_m_pdf = df_metrics_pdf[df_metrics_pdf['Area_Principal'] == area_req].copy() if not df_metrics_pdf.empty else pd.DataFrame(columns=df_metrics_pdf.columns)
-    # --------------------------------------------------------------------------------
     
     grupos_area = sorted(list(set(df_pdf['Grupo_Máquina'].tolist() + df_prod_pdf['Grupo_Máquina'].tolist() + df_m_pdf['Grupo_Máquina'].tolist())))
 
@@ -728,9 +724,31 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
 
     for g in grupos_area:
         maq_del_grupo = sorted(list(set(df_pdf[df_pdf['Grupo_Máquina'] == g]['Máquina'].tolist() + df_m_pdf[df_m_pdf['Grupo_Máquina'] == g]['Máquina'].tolist())))
-        df_pdf_g = df_pdf[df_pdf['Máquina'].isin(maq_del_grupo)]
+        df_pdf_g = df_pdf[df_pdf['Máquina'].isin(maq_del_grupo)].copy()
         if df_pdf_g.empty and not any(m in df_prod_pdf['Máquina'].values for m in maq_del_grupo) and not any(m in df_m_pdf['Máquina'].values for m in maq_del_grupo): continue
             
+        # ==============================================================
+        # PRE-CALCULAR AREA_DT Y FALLA_COMPLETA PARA TODOS LOS GRÁFICOS
+        # ==============================================================
+        is_estampado = 'ESTAMPADO' in area_req.upper()
+        col_disp_mat = 'Matriceria' if is_estampado else 'Dispositivo'
+        lbl_disp_mat = 'MATRIC.' if is_estampado else 'DISPOSIT.'
+
+        if not df_pdf_g.empty:
+            def clasificar_area_dt_global(row):
+                cols = [c for c in df_pdf_g.columns if 'Nivel Evento' in c]
+                niveles = " ".join([str(row.get(c, '')) for c in cols]).upper()
+                if 'MANTENIMIENTO' in niveles: return 'Mantenimiento'
+                if 'MATRICERIA' in niveles or 'MATRICERÍA' in niveles or 'DISPOSITIVO' in niveles: return col_disp_mat
+                if 'TECNOLOGIA' in niveles or 'TECNOLOGÍA' in niveles: return 'Tecnologia'
+                if 'LOGISTICA' in niveles or 'LOGÍSTICA' in niveles: return 'Logistica'
+                if 'GESTION' in niveles or 'GESTIÓN' in niveles: return 'Gestion'
+                return 'Otros'
+            
+            df_pdf_g['Area_DT'] = df_pdf_g.apply(clasificar_area_dt_global, axis=1)
+            # Concatenamos el área y el detalle para que aparezca "Mantenimiento - Falla sensor"
+            df_pdf_g['Falla_Completa'] = df_pdf_g['Area_DT'].astype(str) + " - " + df_pdf_g['Detalle_Final'].astype(str)
+
         pdf.add_page(); pdf.set_link(links_resumen_grupo[g]) 
         pdf.set_font("Times", 'B', 16); pdf.set_text_color(*theme_color)
         pdf.cell(0, 10, clean_text(f"SECCIÓN GRUPO: {g}"), ln=True, align='L', border='B'); pdf.ln(5)
@@ -905,8 +923,9 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
 
         df_g_fallas = df_pdf_g[df_pdf_g['Estado_Global'] == 'Falla/Gestión'].copy()
         if not df_g_fallas.empty:
-            agg_f15 = df_g_fallas.groupby('Detalle_Final')['Tiempo (Min)'].sum().reset_index().sort_values('Tiempo (Min)', ascending=False).head(15).sort_values('Tiempo (Min)')
-            agg_f15['Label'] = agg_f15.apply(lambda r: f" {str(r['Detalle_Final'])[:60]} — {r['Tiempo (Min)']:.0f}m", axis=1)
+            # Agrupamos ahora por 'Falla_Completa' para incluir el Área en la leyenda
+            agg_f15 = df_g_fallas.groupby('Falla_Completa')['Tiempo (Min)'].sum().reset_index().sort_values('Tiempo (Min)', ascending=False).head(15).sort_values('Tiempo (Min)')
+            agg_f15['Label'] = agg_f15.apply(lambda r: f" {str(r['Falla_Completa'])[:60]} — {r['Tiempo (Min)']:.0f}m", axis=1)
             max_x = agg_f15['Tiempo (Min)'].max() if not agg_f15.empty else 1
             
             if p_tipo == "Diario": df_g_fallas['Eje_Temp'] = pd.to_datetime(df_g_fallas['Inicio']).dt.strftime('%H:00')
@@ -918,7 +937,8 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
             pdf.cell(95, 6, clean_text("> Top 15 Fallas:"), 0, 0, 'L'); pdf.cell(95, 6, clean_text("> Tendencia Fallas:"), 0, 1, 'L')
             
             y_bg = pdf.get_y()
-            fig_top15 = px.bar(agg_f15, x='Tiempo (Min)', y='Detalle_Final', orientation='h', text='Label')
+            # Actualizado y='Falla_Completa'
+            fig_top15 = px.bar(agg_f15, x='Tiempo (Min)', y='Falla_Completa', orientation='h', text='Label')
             fig_top15.update_traces(marker_color=hex_comp, textposition='outside', textfont=dict(size=11, color='black'), cliponaxis=False)
             fig_top15.update_layout(height=250, width=450, margin=dict(t=5, b=5, l=10, r=220), plot_bgcolor='rgba(0,0,0,0)', xaxis=dict(visible=False, range=[0, max_x * 1.5]), yaxis=dict(title='', showticklabels=False))
             
@@ -957,8 +977,9 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 top3 = []
                 df_mf = df_maq[df_maq['Estado_Global'] == 'Falla/Gestión']
                 if not df_mf.empty:
-                    for _, r in df_mf.groupby('Detalle_Final')['Tiempo (Min)'].sum().reset_index().sort_values('Tiempo (Min)', ascending=False).head(3).iterrows():
-                        top3.append(f"- {str(r['Detalle_Final']).strip()[:42]} ({r['Tiempo (Min)']:.0f}m)")
+                    # Agrupamos por Falla_Completa para mostrar en la tabla el Área también
+                    for _, r in df_mf.groupby('Falla_Completa')['Tiempo (Min)'].sum().reset_index().sort_values('Tiempo (Min)', ascending=False).head(3).iterrows():
+                        top3.append(f"- {str(r['Falla_Completa']).strip()[:42]} ({r['Tiempo (Min)']:.0f}m)")
                 
                 row_h = max(1, len(top3)) * 5 
                 if pdf.get_y() + row_h > 265: pdf.add_page(); draw_head_maq(); setup_table_row(pdf); pdf.set_font("Arial", '', 7)
@@ -982,27 +1003,13 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 pdf.set_xy(x_p, y_p + row_h); fill_t = not fill_t
             pdf.ln(5)
 
-        # --- NUEVA SECCIÓN: DOWN TIME POR ÁREA ---
+        # --- SECCIÓN: DOWN TIME POR ÁREA ---
         check_space(pdf, 45)
         print_section_title(pdf, "Distribución de Down Time por Área", theme_color)
         
-        is_estampado = 'ESTAMPADO' in area_req.upper()
-        col_disp_mat = 'Matriceria' if is_estampado else 'Dispositivo'
-        lbl_disp_mat = 'MATRIC.' if is_estampado else 'DISPOSIT.'
-
         df_fallas_area = df_pdf_g[df_pdf_g['Estado_Global'] == 'Falla/Gestión'].copy()
         if not df_fallas_area.empty:
-            def clasificar_area_dt(row):
-                cols = [c for c in df_fallas_area.columns if 'Nivel Evento' in c]
-                niveles = " ".join([str(row.get(c, '')) for c in cols]).upper()
-                if 'MANTENIMIENTO' in niveles: return 'Mantenimiento'
-                if 'MATRICERIA' in niveles or 'MATRICERÍA' in niveles or 'DISPOSITIVO' in niveles: return col_disp_mat
-                if 'TECNOLOGIA' in niveles or 'TECNOLOGÍA' in niveles: return 'Tecnologia'
-                if 'LOGISTICA' in niveles or 'LOGÍSTICA' in niveles: return 'Logistica'
-                if 'GESTION' in niveles or 'GESTIÓN' in niveles: return 'Gestion'
-                return 'Otros'
-            
-            df_fallas_area['Area_DT'] = df_fallas_area.apply(clasificar_area_dt, axis=1)
+            # Como Area_DT ya fue precalculado arriba, solo agrupamos directamente
             dt_pivot = df_fallas_area.groupby(['Máquina', 'Area_DT'])['Tiempo (Min)'].sum().unstack(fill_value=0).reset_index()
             
             columnas_esperadas = ['Mantenimiento', col_disp_mat, 'Tecnologia', 'Logistica', 'Gestion', 'Otros']
@@ -1093,7 +1100,6 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
 
             maquinas_prod = sorted(df_prod_g['Máquina'].unique())
             for maq_p in maquinas_prod:
-                # AQUÍ USAMOS EL TC DIRECTAMENTE CON MAX
                 df_m_prod = df_prod_g[df_prod_g['Máquina'] == maq_p].groupby('Código').agg({
                     'Buenas': 'sum',
                     'Retrabajo': 'sum',
@@ -1120,7 +1126,6 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                         pdf.cell(25, 4.5, str(int(row_prod['Retrabajo'])), 'B', 0, 'C')
                         pdf.cell(25, 4.5, str(int(row_prod['Observadas'])), 'B', 0, 'C')
                         
-                        # Cálculo simple y directo del Ciclo
                         tc_val = row_prod.get('TC', 0)
                         pzs_h = (60 / tc_val) if pd.notna(tc_val) and tc_val > 0 else 0
                         tc_str = f"{tc_val:.3f}" if pd.notna(tc_val) and tc_val > 0 else "-"
