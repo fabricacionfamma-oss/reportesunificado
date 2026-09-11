@@ -150,7 +150,7 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
                 q_exc = f"SELECT DISTINCT c.Name as Máquina, pr.Code FROM PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Month = {mes} AND p.Year = {anio} AND pr.Code IN ({piezas_str})"
                 df_piezas_excluidas = pd.concat([run_query_safe(conn_famma, q_exc), run_query_safe(conn_fumiscor, q_exc)], ignore_index=True)
 
-            q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas FROM PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Month = {mes} AND p.Year = {anio} {prod_where} GROUP BY c.Name, pr.Code"
+            q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, MAX(p.IdealCycleTime) as TC FROM PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Month = {mes} AND p.Year = {anio} {prod_where} GROUP BY c.Name, pr.Code"
             tb_prod = "PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId" if lista_piezas_h else "PROD_M_03 p JOIN CELL c ON p.CellId = c.CellId"
             
             q_metrics = f"SELECT c.Name as Máquina, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, SUM(p.ProductiveTime) as T_Operativo, SUM(p.DownTime) as T_Parada, (SUM(p.Performance * p.ProductiveTime) / NULLIF(SUM(p.ProductiveTime), 0)) as PERFORMANCE, (SUM(p.Availability * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as DISPONIBILIDAD, (SUM(p.Quality * (p.Good + p.Rework + p.Scrap)) / NULLIF(SUM(p.Good + p.Rework + p.Scrap), 0)) as CALIDAD, (SUM(p.Oee * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as OEE FROM {tb_prod} WHERE p.Month = {mes} AND p.Year = {anio} {prod_where} GROUP BY c.Name"
@@ -167,7 +167,7 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
                 q_exc = f"SELECT DISTINCT c.Name as Máquina, pr.Code FROM PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' AND pr.Code IN ({piezas_str})"
                 df_piezas_excluidas = pd.concat([run_query_safe(conn_famma, q_exc), run_query_safe(conn_fumiscor, q_exc)], ignore_index=True)
 
-            q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas FROM PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' {prod_where} GROUP BY c.Name, pr.Code"
+            q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, MAX(p.IdealCycleTime) as TC FROM PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' {prod_where} GROUP BY c.Name, pr.Code"
             tb_prod = "PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId" if lista_piezas_h else "PROD_D_03 p JOIN CELL c ON p.CellId = c.CellId"
             
             q_metrics = f"SELECT c.Name as Máquina, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, SUM(p.ProductiveTime) as T_Operativo, SUM(p.DownTime) as T_Parada, (SUM(p.Performance * p.ProductiveTime) / NULLIF(SUM(p.ProductiveTime), 0)) as PERFORMANCE, (SUM(p.Availability * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as DISPONIBILIDAD, (SUM(p.Quality * (p.Good + p.Rework + p.Scrap)) / NULLIF(SUM(p.Good + p.Rework + p.Scrap), 0)) as CALIDAD, (SUM(p.Oee * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as OEE FROM {tb_prod} WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' {prod_where} GROUP BY c.Name"
@@ -1070,14 +1070,22 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
             def dibujar_cabeza_prod():
                 setup_table_header(pdf, theme_color)
                 pdf.set_font("Arial", 'B', 8)
-                pdf.cell(70, 5, "Codigo Producto", 1, 0, 'C', True)
-                pdf.cell(30, 5, "Buenas", 1, 0, 'C', True)
-                pdf.cell(30, 5, "Retrab.", 1, 0, 'C', True)
-                pdf.cell(30, 5, "Observ.", 1, 1, 'C', True)
+                pdf.cell(65, 5, "Codigo Producto", 1, 0, 'C', True)
+                pdf.cell(25, 5, "Buenas", 1, 0, 'C', True)
+                pdf.cell(25, 5, "Retrab.", 1, 0, 'C', True)
+                pdf.cell(25, 5, "Observ.", 1, 0, 'C', True)
+                pdf.cell(20, 5, "TC (Min)", 1, 0, 'C', True)
+                pdf.cell(25, 5, "Pzs/h", 1, 1, 'C', True)
 
             maquinas_prod = sorted(df_prod_g['Máquina'].unique())
             for maq_p in maquinas_prod:
-                df_m_prod = df_prod_g[df_prod_g['Máquina'] == maq_p].groupby('Código')[['Buenas', 'Retrabajo', 'Observadas']].sum().reset_index()
+                df_m_prod = df_prod_g[df_prod_g['Máquina'] == maq_p].groupby('Código').agg({
+                    'Buenas': 'sum',
+                    'Retrabajo': 'sum',
+                    'Observadas': 'sum',
+                    'TC': 'max'
+                }).reset_index()
+                
                 total_piezas = df_m_prod['Buenas'].sum() + df_m_prod['Retrabajo'].sum() + df_m_prod['Observadas'].sum()
                 
                 if total_piezas > 0:
@@ -1091,10 +1099,19 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                     for _, row_prod in top5_prod.iterrows():
                         if pdf.get_y() > 265:
                             pdf.add_page(); dibujar_cabeza_prod(); setup_table_row(pdf); pdf.set_font("Arial", '', 8)
-                        pdf.cell(70, 4.5, " " + clean_text(str(row_prod['Código'])[:45]), 'B') 
-                        pdf.cell(30, 4.5, str(int(row_prod['Buenas'])), 'B', 0, 'C')
-                        pdf.cell(30, 4.5, str(int(row_prod['Retrabajo'])), 'B', 0, 'C')
-                        pdf.cell(30, 4.5, str(int(row_prod['Observadas'])), 'B', 1, 'C')
+                        
+                        pdf.cell(65, 4.5, " " + clean_text(str(row_prod['Código'])[:45]), 'B') 
+                        pdf.cell(25, 4.5, str(int(row_prod['Buenas'])), 'B', 0, 'C')
+                        pdf.cell(25, 4.5, str(int(row_prod['Retrabajo'])), 'B', 0, 'C')
+                        pdf.cell(25, 4.5, str(int(row_prod['Observadas'])), 'B', 0, 'C')
+                        
+                        tc_val = row_prod.get('TC', 0)
+                        pzs_h = (60 / tc_val) if pd.notna(tc_val) and tc_val > 0 else 0
+                        tc_str = f"{tc_val:.3f}" if pd.notna(tc_val) and tc_val > 0 else "-"
+                        pzs_str = f"{int(pzs_h)}" if pzs_h > 0 else "-"
+                        
+                        pdf.cell(20, 4.5, tc_str, 'B', 0, 'C')
+                        pdf.cell(25, 4.5, pzs_str, 'B', 1, 'C')
                     pdf.ln(3)
 
     # =========================================================================
