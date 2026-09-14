@@ -150,7 +150,8 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
                 q_exc = f"SELECT DISTINCT c.Name as Máquina, pr.Code FROM PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Month = {mes} AND p.Year = {anio} AND pr.Code IN ({piezas_str})"
                 df_piezas_excluidas = pd.concat([run_query_safe(conn_famma, q_exc), run_query_safe(conn_fumiscor, q_exc)], ignore_index=True)
 
-            q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, MAX(p.CycleTime) as TC FROM PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Month = {mes} AND p.Year = {anio} {prod_where} GROUP BY c.Name, pr.Code"
+            # CAMBIO SQL 1: Agregamos p.CycleTime al GROUP BY para obtener todas las combinaciones distintas de TC
+            q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, p.CycleTime as TC FROM PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Month = {mes} AND p.Year = {anio} {prod_where} GROUP BY c.Name, pr.Code, p.CycleTime"
             tb_prod = "PROD_M_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId" if lista_piezas_h else "PROD_M_03 p JOIN CELL c ON p.CellId = c.CellId"
             
             q_metrics = f"SELECT c.Name as Máquina, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, SUM(p.ProductiveTime) as T_Operativo, SUM(p.DownTime) as T_Parada, (SUM(p.Performance * p.ProductiveTime) / NULLIF(SUM(p.ProductiveTime), 0)) as PERFORMANCE, (SUM(p.Availability * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as DISPONIBILIDAD, (SUM(p.Quality * (p.Good + p.Rework + p.Scrap)) / NULLIF(SUM(p.Good + p.Rework + p.Scrap), 0)) as CALIDAD, (SUM(p.Oee * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as OEE FROM {tb_prod} WHERE p.Month = {mes} AND p.Year = {anio} {prod_where} GROUP BY c.Name"
@@ -167,7 +168,8 @@ def fetch_data_from_db(fecha_ini, fecha_fin, tipo_periodo, mes=None, anio=None, 
                 q_exc = f"SELECT DISTINCT c.Name as Máquina, pr.Code FROM PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' AND pr.Code IN ({piezas_str})"
                 df_piezas_excluidas = pd.concat([run_query_safe(conn_famma, q_exc), run_query_safe(conn_fumiscor, q_exc)], ignore_index=True)
 
-            q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, MAX(p.CycleTime) as TC FROM PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' {prod_where} GROUP BY c.Name, pr.Code"
+            # CAMBIO SQL 2: Agregamos p.CycleTime al GROUP BY para obtener todas las combinaciones distintas de TC
+            q_prod = f"SELECT c.Name as Máquina, pr.Code as Código, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, p.CycleTime as TC FROM PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' {prod_where} GROUP BY c.Name, pr.Code, p.CycleTime"
             tb_prod = "PROD_D_01 p JOIN CELL c ON p.CellId = c.CellId JOIN PRODUCT pr ON p.ProductId = pr.ProductId" if lista_piezas_h else "PROD_D_03 p JOIN CELL c ON p.CellId = c.CellId"
             
             q_metrics = f"SELECT c.Name as Máquina, SUM(p.Good) as Buenas, SUM(p.Rework) as Retrabajo, SUM(p.Scrap) as Observadas, SUM(p.ProductiveTime) as T_Operativo, SUM(p.DownTime) as T_Parada, (SUM(p.Performance * p.ProductiveTime) / NULLIF(SUM(p.ProductiveTime), 0)) as PERFORMANCE, (SUM(p.Availability * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as DISPONIBILIDAD, (SUM(p.Quality * (p.Good + p.Rework + p.Scrap)) / NULLIF(SUM(p.Good + p.Rework + p.Scrap), 0)) as CALIDAD, (SUM(p.Oee * (p.ProductiveTime + p.DownTime)) / NULLIF(SUM(p.ProductiveTime + p.DownTime), 0)) as OEE FROM {tb_prod} WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}' {prod_where} GROUP BY c.Name"
@@ -735,7 +737,8 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         lbl_disp_mat = 'MATRIC.' if is_estampado else 'DISPOSIT.'
 
         if not df_pdf_g.empty:
-            def obtener_area_maestra(row):
+            def obtener_area_real(row):
+                # Busca las 7 maestras en todos los niveles del evento concatenados
                 cols = [c for c in df_pdf_g.columns if 'Nivel Evento' in c]
                 niveles_str = " ".join([str(row.get(c, '')) for c in cols]).upper()
                 
@@ -746,11 +749,17 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 if 'LOGISTICA' in niveles_str or 'LOGÍSTICA' in niveles_str: return 'Logistica'
                 if 'GESTION' in niveles_str or 'GESTIÓN' in niveles_str: return 'Gestion'
                 if 'CALIDAD' in niveles_str: return 'Calidad'
+                
+                # Si por algún motivo no coincide con las 7, salta la palabra "Fallas" y toma la siguiente
+                for col in ['Nivel Evento 2', 'Nivel Evento 3', 'Nivel Evento 4']:
+                    val = str(row.get(col, '')).strip()
+                    if val and val.lower() not in ['none', 'nan', 'null', ''] and 'falla' not in val.lower():
+                        return val.title()
                 return 'General'
 
-            df_pdf_g['Area_Maestra'] = df_pdf_g.apply(obtener_area_maestra, axis=1)
+            df_pdf_g['Area_Falla'] = df_pdf_g.apply(obtener_area_real, axis=1)
             # Esto crea el texto exacto unificado: "Mantenimiento - Falla sensor" o "Calidad - Pieza mala"
-            df_pdf_g['Falla_Completa'] = df_pdf_g['Area_Maestra'].astype(str) + " - " + df_pdf_g['Detalle_Final'].astype(str)
+            df_pdf_g['Falla_Completa'] = df_pdf_g['Area_Falla'].astype(str) + " - " + df_pdf_g['Detalle_Final'].astype(str)
 
         pdf.add_page(); pdf.set_link(links_resumen_grupo[g]) 
         pdf.set_font("Times", 'B', 16); pdf.set_text_color(*theme_color)
@@ -1012,10 +1021,14 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         df_fallas_area = df_pdf_g[df_pdf_g['Estado_Global'] == 'Falla/Gestión'].copy()
         if not df_fallas_area.empty:
             def clasificar_area_dt_tabla(row):
-                area = row['Area_Maestra']
-                if area in ['Matriceria', 'Dispositivo']: return col_disp_mat
-                if area == 'General': return 'Calidad' # Enviamos cualquier remanente genérico a Calidad para limpiar la tabla
-                return area
+                area = str(row['Area_Falla']).upper()
+                if 'MANTENIMIENTO' in area: return 'Mantenimiento'
+                if 'MATRICERIA' in area or 'DISPOSITIVO' in area: return col_disp_mat
+                if 'TECNOLOGIA' in area or 'TECNOLOGÍA' in area: return 'Tecnologia'
+                if 'LOGISTICA' in area or 'LOGÍSTICA' in area: return 'Logistica'
+                if 'GESTION' in area or 'GESTIÓN' in area: return 'Gestion'
+                if 'CALIDAD' in area: return 'Calidad'
+                return 'Calidad' # Si existiera un área nueva, la suma a Calidad para no usar "Otros"
             
             df_fallas_area['Area_DT'] = df_fallas_area.apply(clasificar_area_dt_tabla, axis=1)
             dt_pivot = df_fallas_area.groupby(['Máquina', 'Area_DT'])['Tiempo (Min)'].sum().unstack(fill_value=0).reset_index()
@@ -1027,7 +1040,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
             
             def draw_head_dt():
                 setup_table_header(pdf, theme_color)
-                # Fila 1 - Titulos
+                # Fila 1 - Titulos 
                 pdf.set_font("Arial", 'B', 7)
                 pdf.cell(30, 5, "MAQUINA", 'LTR', 0, 'C', True)
                 pdf.cell(26, 5, "MANTEN.", 'LTR', 0, 'C', True)
@@ -1108,20 +1121,22 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
             def dibujar_cabeza_prod():
                 setup_table_header(pdf, theme_color)
                 pdf.set_font("Arial", 'B', 8)
-                pdf.cell(65, 5, "Codigo Producto", 1, 0, 'C', True)
-                pdf.cell(25, 5, "Buenas", 1, 0, 'C', True)
-                pdf.cell(25, 5, "Retrab.", 1, 0, 'C', True)
-                pdf.cell(25, 5, "Observ.", 1, 0, 'C', True)
-                pdf.cell(20, 5, "TC (Min)", 1, 0, 'C', True)
-                pdf.cell(25, 5, "Pzs/h", 1, 1, 'C', True)
+                # Ajustamos anchos para dar espacio a múltiples TCs separados por comas
+                pdf.cell(55, 5, "Codigo Producto", 1, 0, 'C', True)
+                pdf.cell(20, 5, "Buenas", 1, 0, 'C', True)
+                pdf.cell(20, 5, "Retrab.", 1, 0, 'C', True)
+                pdf.cell(20, 5, "Observ.", 1, 0, 'C', True)
+                pdf.cell(35, 5, "TC (Min)", 1, 0, 'C', True)
+                pdf.cell(35, 5, "Pzs/h", 1, 1, 'C', True)
 
             maquinas_prod = sorted(df_prod_g['Máquina'].unique())
             for maq_p in maquinas_prod:
+                # Usamos set/list en el lambda para capturar todos los CycleTimes distintos
                 df_m_prod = df_prod_g[df_prod_g['Máquina'] == maq_p].groupby('Código').agg({
                     'Buenas': 'sum',
                     'Retrabajo': 'sum',
                     'Observadas': 'sum',
-                    'TC': 'max'
+                    'TC': lambda x: sorted(list(set([v for v in x if pd.notna(v) and v > 0])))
                 }).reset_index()
                 
                 total_piezas = df_m_prod['Buenas'].sum() + df_m_prod['Retrabajo'].sum() + df_m_prod['Observadas'].sum()
@@ -1138,18 +1153,22 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                         if pdf.get_y() > 265:
                             pdf.add_page(); dibujar_cabeza_prod(); setup_table_row(pdf); pdf.set_font("Arial", '', 8)
                         
-                        pdf.cell(65, 4.5, " " + clean_text(str(row_prod['Código'])[:45]), 'B') 
-                        pdf.cell(25, 4.5, str(int(row_prod['Buenas'])), 'B', 0, 'C')
-                        pdf.cell(25, 4.5, str(int(row_prod['Retrabajo'])), 'B', 0, 'C')
-                        pdf.cell(25, 4.5, str(int(row_prod['Observadas'])), 'B', 0, 'C')
+                        pdf.cell(55, 4.5, " " + clean_text(str(row_prod['Código'])[:35]), 'B') 
+                        pdf.cell(20, 4.5, str(int(row_prod['Buenas'])), 'B', 0, 'C')
+                        pdf.cell(20, 4.5, str(int(row_prod['Retrabajo'])), 'B', 0, 'C')
+                        pdf.cell(20, 4.5, str(int(row_prod['Observadas'])), 'B', 0, 'C')
                         
-                        tc_val = row_prod.get('TC', 0)
-                        pzs_h = (60 / tc_val) if pd.notna(tc_val) and tc_val > 0 else 0
-                        tc_str = f"{tc_val:.3f}" if pd.notna(tc_val) and tc_val > 0 else "-"
-                        pzs_str = f"{int(pzs_h)}" if pzs_h > 0 else "-"
+                        # Generamos los strings separados por coma para todos los TC registrados
+                        tc_list = row_prod['TC']
+                        if tc_list and len(tc_list) > 0:
+                            tc_str = ", ".join([str(round(v, 3)) for v in tc_list])
+                            pzs_str = ", ".join([str(int(60/v)) for v in tc_list])
+                        else:
+                            tc_str = "-"
+                            pzs_str = "-"
                         
-                        pdf.cell(20, 4.5, tc_str, 'B', 0, 'C')
-                        pdf.cell(25, 4.5, pzs_str, 'B', 1, 'C')
+                        pdf.cell(35, 4.5, tc_str[:30], 'B', 0, 'C')
+                        pdf.cell(35, 4.5, pzs_str[:30], 'B', 1, 'C')
                     pdf.ln(3)
 
     # =========================================================================
