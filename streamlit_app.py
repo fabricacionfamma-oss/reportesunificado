@@ -1171,6 +1171,82 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                         pdf.cell(35, 4.5, pzs_str[:30], 'B', 1, 'C')
                     pdf.ln(3)
 
+        # =========================================================================
+        # NUEVA SECCIÓN: DESGLOSE DE PARADAS PROGRAMADAS (SMED / SET-UP) POR GRUPO
+        # =========================================================================
+        check_space(pdf, 35)
+        print_section_title(pdf, "Desglose de Paradas Programadas (SMED y Otros)", theme_color)
+        
+        # Filtramos solo los eventos clasificados como 'Parada Programada' para las máquinas de ESTE grupo
+        df_paradas_g = df_pdf_g[df_pdf_g['Estado_Global'] == 'Parada Programada'].copy()
+        
+        if not df_paradas_g.empty:
+            # Agrupamos por Máquina y por el Detalle de la parada
+            agg_paradas = df_paradas_g.groupby(['Máquina', 'Detalle_Final']).agg(
+                Cant_Eventos=('Tiempo (Min)', 'count'),
+                Total_Min=('Tiempo (Min)', 'sum')
+            ).reset_index()
+            
+            # Calculamos el tiempo promedio
+            agg_paradas['Prom_Min'] = agg_paradas['Total_Min'] / agg_paradas['Cant_Eventos']
+            
+            # Ordenamos por Máquina alfabéticamente y luego por los que llevaron más tiempo
+            agg_paradas = agg_paradas.sort_values(['Máquina', 'Total_Min'], ascending=[True, False])
+            
+            def dibujar_cabeza_paradas():
+                setup_table_header(pdf, theme_color)
+                pdf.set_font("Arial", 'B', 8)
+                pdf.cell(45, 5, "Maquina", 1, 0, 'C', True)
+                pdf.cell(65, 5, "Detalle Tarea (SMED / Otros)", 1, 0, 'C', True)
+                pdf.cell(25, 5, "Cant. Eventos", 1, 0, 'C', True)
+                pdf.cell(30, 5, "Duracion Total", 1, 0, 'C', True)
+                pdf.cell(25, 5, "T. Promedio", 1, 1, 'C', True)
+
+            dibujar_cabeza_paradas()
+            setup_table_row(pdf)
+            pdf.set_font("Arial", '', 8)
+            fill_p = False
+            
+            for _, r_par in agg_paradas.iterrows():
+                if pdf.get_y() > 265:
+                    pdf.add_page()
+                    dibujar_cabeza_paradas()
+                    setup_table_row(pdf)
+                    pdf.set_font("Arial", '', 8)
+                
+                if fill_p:
+                    pdf.set_fill_color(235, 243, 250)
+                else:
+                    pdf.set_fill_color(255, 255, 255)
+                
+                pdf.set_text_color(50, 50, 50)
+                pdf.cell(45, 5, " " + clean_text(r_par['Máquina'])[:22], 1, 0, 'L', True)
+                pdf.cell(65, 5, " " + clean_text(r_par['Detalle_Final'])[:35], 1, 0, 'L', True)
+                pdf.cell(25, 5, str(int(r_par['Cant_Eventos'])), 1, 0, 'C', True)
+                pdf.cell(30, 5, mins_to_duration_str(r_par['Total_Min']), 1, 0, 'C', True)
+                
+                # Resaltar en rojo si el tiempo promedio supera los 30 minutos
+                if r_par['Prom_Min'] > 30:
+                    pdf.set_text_color(220, 20, 20)  # Rojo
+                    pdf.set_font("Arial", 'B', 8)    # Opcional: poner en negrita para resaltar más
+                else:
+                    pdf.set_text_color(50, 50, 50)   # Color normal
+                    pdf.set_font("Arial", '', 8)
+
+                pdf.cell(25, 5, f"{r_par['Prom_Min']:.1f} min", 1, 1, 'C', True)
+                
+                # Restaurar fuente y color normal para la siguiente fila
+                pdf.set_text_color(50, 50, 50)
+                pdf.set_font("Arial", '', 8)
+                fill_p = not fill_p
+                
+            pdf.ln(5)
+        else:
+            pdf.set_font("Arial", 'I', 9)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(0, 5, clean_text("No se registraron Paradas Programadas (SMED) en este grupo."), ln=True)
+            pdf.ln(3)
+
     # =========================================================================
     # SECCIÓN FINAL OPERARIOS Y TIEMPOS DE DESCANSO
     # =========================================================================
