@@ -366,6 +366,39 @@ with st.container():
 with st.spinner("Extrayendo y unificando información..."):
     df_raw, pdf_df_prod_target, pdf_df_op_target, df_trend, df_metrics, df_horarios, df_metrics_std, df_piezas_excluidas = fetch_data_from_db(pdf_ini, pdf_fin, pdf_tipo, mes=pdf_mes, anio=pdf_anio, lista_piezas_h=lista_piezas_h)
 
+# --- INICIO NUEVO CÓDIGO: CÁLCULO DE BAÑO Y REFRIGERIO ---
+if not df_horarios.empty and not df_raw.empty:
+    def categorizar_descanso(val):
+        v = str(val).upper()
+        if 'BAÑO' in v or 'BANO' in v: return 'Bano'
+        if 'REFRIGERIO' in v: return 'Refrigerio'
+        return None
+    
+    df_desc = df_raw.copy()
+    df_desc['Tipo_Descanso'] = df_desc['Detalle_Final'].apply(categorizar_descanso)
+    df_desc = df_desc.dropna(subset=['Tipo_Descanso'])
+    
+    if not df_desc.empty:
+        df_horarios['Dia_tmp'] = pd.to_datetime(df_horarios['Dia']).dt.date
+        df_desc['Fecha_tmp'] = pd.to_datetime(df_desc['Fecha_Filtro']).dt.date
+        
+        desc_grp = df_desc.groupby(['Máquina', 'Turno', 'Fecha_tmp', 'Tipo_Descanso'])['Tiempo (Min)'].sum().unstack(fill_value=0).reset_index()
+        
+        if 'Bano' not in desc_grp.columns: desc_grp['Bano'] = 0
+        if 'Refrigerio' not in desc_grp.columns: desc_grp['Refrigerio'] = 0
+        
+        df_horarios = pd.merge(df_horarios, desc_grp, how='left', left_on=['Máquina', 'Turno', 'Dia_tmp'], right_on=['Máquina', 'Turno', 'Fecha_tmp'])
+        df_horarios['Bano'] = df_horarios['Bano'].fillna(0)
+        df_horarios['Refrigerio'] = df_horarios['Refrigerio'].fillna(0)
+    else:
+        df_horarios['Bano'] = 0
+        df_horarios['Refrigerio'] = 0
+elif not df_horarios.empty:
+    df_horarios['Bano'] = 0
+    df_horarios['Refrigerio'] = 0
+# --- FIN NUEVO CÓDIGO ---
+
+
 if not df_metrics.empty:
     df_metrics['Grupo_Máquina'] = df_metrics['Máquina'].apply(asignar_grupo_dinamico)
     df_metrics['Area_Principal'] = df_metrics['Grupo_Máquina'].apply(asignar_area_principal)
@@ -858,10 +891,11 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
 
             if not df_horarios_g.empty:
                 if p_tipo == "Semanal":
-                    w_maq = 35; w_tur = 15; w_day = 27
+                    w_maq = 28; w_tur = 12; w_day = 19; w_desc = 25
                     pdf.cell(w_maq, 6, "Maquina", 1, 0, 'C', True); pdf.cell(w_tur, 6, "Turno", 1, 0, 'C', True)
-                    for d in ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes"]: pdf.cell(w_day, 6, d, 1, 0 if d != "Viernes" else 1, 'C', True)
-                    setup_table_row(pdf); pdf.set_font("Arial", '', 8)
+                    for d in ["Lunes", "Martes", "Mierc.", "Jueves", "Viernes"]: pdf.cell(w_day, 6, d, 1, 0, 'C', True)
+                    pdf.cell(w_desc, 6, "Bano (Tot)", 1, 0, 'C', True); pdf.cell(w_desc, 6, "Refrig (Tot)", 1, 1, 'C', True)
+                    setup_table_row(pdf); pdf.set_font("Arial", '', 7)
                     df_horarios_g['Dia'] = pd.to_datetime(df_horarios_g['Dia'])
                     df_horarios_g['Rango'] = df_horarios_g.apply(lambda r: f"{r['Hora_Inicio']}-{r['Hora_Cierre']}" if pd.notna(r['Hora_Inicio']) else "", axis=1)
 
@@ -869,30 +903,42 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                         if pdf.get_y() > 265: 
                             pdf.add_page(); setup_table_header(pdf, theme_color); pdf.set_font("Arial", 'B', 8)
                             pdf.cell(w_maq, 6, "Maquina", 1, 0, 'C', True); pdf.cell(w_tur, 6, "Turno", 1, 0, 'C', True)
-                            for d in ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes"]: pdf.cell(w_day, 6, d, 1, 0 if d != "Viernes" else 1, 'C', True)
-                            setup_table_row(pdf); pdf.set_font("Arial", '', 8)
-                        pdf.cell(w_maq, 5, " " + clean_text(m_name), 1, 0, 'L'); pdf.cell(w_tur, 5, clean_text(tr), 1, 0, 'C')
+                            for d in ["Lunes", "Martes", "Mierc.", "Jueves", "Viernes"]: pdf.cell(w_day, 6, d, 1, 0, 'C', True)
+                            pdf.cell(w_desc, 6, "Bano (Tot)", 1, 0, 'C', True); pdf.cell(w_desc, 6, "Refrig (Tot)", 1, 1, 'C', True)
+                            setup_table_row(pdf); pdf.set_font("Arial", '', 7)
+                            
+                        pdf.cell(w_maq, 5, " " + clean_text(m_name)[:12], 1, 0, 'L'); pdf.cell(w_tur, 5, clean_text(tr)[:6], 1, 0, 'C')
                         for day_idx in range(5):
                             d_data = grp[grp['Dia'].dt.weekday == day_idx]
-                            pdf.cell(w_day, 5, d_data.iloc[0]['Rango'] if not d_data.empty else "", 1, 0 if day_idx < 4 else 1, 'C')
-                        pdf.ln()
-                else:
-                    w_maq = 35; w_tur = 20; w_hor = 30; w_tie = 35
+                            pdf.cell(w_day, 5, d_data.iloc[0]['Rango'] if not d_data.empty else "", 1, 0, 'C')
+                            
+                        bano_tot = grp['Bano'].sum() if 'Bano' in grp.columns else 0
+                        ref_tot = grp['Refrigerio'].sum() if 'Refrigerio' in grp.columns else 0
+                        pdf.cell(w_desc, 5, mins_to_duration_str(bano_tot), 1, 0, 'C')
+                        pdf.cell(w_desc, 5, mins_to_duration_str(ref_tot), 1, 1, 'C')
+                else: # p_tipo Diario
+                    w_maq = 30; w_tur = 15; w_hor = 20; w_tie = 25; w_desc = 25
                     pdf.cell(w_maq, 6, "Maquina", 1, 0, 'C', True); pdf.cell(w_tur, 6, "Turno", 1, 0, 'C', True)
-                    pdf.cell(w_hor, 6, "Hora Inicio", 1, 0, 'C', True); pdf.cell(w_hor, 6, "Hora Cierre", 1, 0, 'C', True)
-                    pdf.cell(w_tie, 6, "Apertura Neta", 1, 0, 'C', True); pdf.cell(w_tie, 6, "No Registrado", 1, 1, 'C', True)
-                    setup_table_row(pdf); pdf.set_font("Arial", '', 8)
+                    pdf.cell(w_hor, 6, "H. Inicio", 1, 0, 'C', True); pdf.cell(w_hor, 6, "H. Cierre", 1, 0, 'C', True)
+                    pdf.cell(w_tie, 6, "Apertura Neta", 1, 0, 'C', True); pdf.cell(w_tie, 6, "No Registrado", 1, 0, 'C', True)
+                    pdf.cell(w_desc, 6, clean_text("Baño"), 1, 0, 'C', True); pdf.cell(w_desc, 6, "Refrigerio", 1, 1, 'C', True)
+                    
+                    setup_table_row(pdf); pdf.set_font("Arial", '', 7)
                     for _, r_hor in df_horarios_g.sort_values(['Máquina', 'Turno']).iterrows():
                         if pdf.get_y() > 265: 
                             pdf.add_page(); setup_table_header(pdf, theme_color); pdf.set_font("Arial", 'B', 8)
                             pdf.cell(w_maq, 6, "Maquina", 1, 0, 'C', True); pdf.cell(w_tur, 6, "Turno", 1, 0, 'C', True)
-                            pdf.cell(w_hor, 6, "Hora Inicio", 1, 0, 'C', True); pdf.cell(w_hor, 6, "Hora Cierre", 1, 0, 'C', True)
-                            pdf.cell(w_tie, 6, "Apertura Neta", 1, 0, 'C', True); pdf.cell(w_tie, 6, "No Registrado", 1, 1, 'C', True)
-                            setup_table_row(pdf); pdf.set_font("Arial", '', 8)
-                        pdf.cell(w_maq, 5, " " + clean_text(r_hor['Máquina']), 1, 0, 'L'); pdf.cell(w_tur, 5, clean_text(r_hor['Turno']), 1, 0, 'C')
+                            pdf.cell(w_hor, 6, "H. Inicio", 1, 0, 'C', True); pdf.cell(w_hor, 6, "H. Cierre", 1, 0, 'C', True)
+                            pdf.cell(w_tie, 6, "Apertura Neta", 1, 0, 'C', True); pdf.cell(w_tie, 6, "No Registrado", 1, 0, 'C', True)
+                            pdf.cell(w_desc, 6, clean_text("Baño"), 1, 0, 'C', True); pdf.cell(w_desc, 6, "Refrigerio", 1, 1, 'C', True)
+                            setup_table_row(pdf); pdf.set_font("Arial", '', 7)
+                            
+                        pdf.cell(w_maq, 5, " " + clean_text(r_hor['Máquina'])[:15], 1, 0, 'L'); pdf.cell(w_tur, 5, clean_text(r_hor['Turno'])[:10], 1, 0, 'C')
                         pdf.cell(w_hor, 5, clean_text(r_hor['Hora_Inicio']), 1, 0, 'C'); pdf.cell(w_hor, 5, clean_text(r_hor['Hora_Cierre']), 1, 0, 'C')
                         pdf.cell(w_tie, 5, mins_to_duration_str(r_hor.get('Apertura_Neta_Min', 0)), 1, 0, 'C')
-                        pdf.cell(w_tie, 5, mins_to_duration_str(r_hor.get('No_Registrado_Min', 0)), 1, 1, 'C')
+                        pdf.cell(w_tie, 5, mins_to_duration_str(r_hor.get('No_Registrado_Min', 0)), 1, 0, 'C')
+                        pdf.cell(w_desc, 5, mins_to_duration_str(r_hor.get('Bano', 0)), 1, 0, 'C')
+                        pdf.cell(w_desc, 5, mins_to_duration_str(r_hor.get('Refrigerio', 0)), 1, 1, 'C')
             else:
                 pdf.cell(185, 5, "No hay registros de turnos para este periodo.", 1, 1, 'C')
             pdf.ln(5)
@@ -1208,7 +1254,7 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                 
                 if r_par['Prom_Min'] > 30:
                     pdf.set_text_color(220, 20, 20)  
-                    pdf.set_font("Arial", 'B', 8)    
+                    pdf.set_font("Arial", 'B', 8)   
                 else:
                     pdf.set_text_color(50, 50, 50)   
                     pdf.set_font("Arial", '', 8)
