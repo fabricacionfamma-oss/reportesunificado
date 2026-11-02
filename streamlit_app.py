@@ -816,19 +816,23 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
             metrics = obtener_metricas_maquina(maq, df_m_pdf)
             if metrics:
                 maquinas_metricas[maq] = metrics
-                t_p = metrics['T_Planificado']; t_o = metrics['T_Operativo']
-                g_plan += t_p; g_op += t_o
-                g_buenas += metrics['Buenas']; g_totales += metrics['Totales']
-                g_disp_w += metrics['DISPONIBILIDAD'] * t_p; g_perf_w += metrics['PERFORMANCE'] * t_o
+                # EXCLUIR DOB-007 DEL ACUMULADO DEL GRUPO
+                if maq != 'DOB-007':
+                    t_p = metrics['T_Planificado']; t_o = metrics['T_Operativo']
+                    g_plan += t_p; g_op += t_o
+                    g_buenas += metrics['Buenas']; g_totales += metrics['Totales']
+                    g_disp_w += metrics['DISPONIBILIDAD'] * t_p; g_perf_w += metrics['PERFORMANCE'] * t_o
             
             if is_h_active:
                 metrics_std = obtener_metricas_maquina(maq, df_metrics_std_pdf)
                 if metrics_std:
                     maquinas_metricas_std[maq] = metrics_std
-                    g_plan_std += metrics_std['T_Planificado']; g_op_std += metrics_std['T_Operativo']
-                    g_buenas_std += metrics_std['Buenas']; g_totales_std += metrics_std['Totales']
-                    g_disp_w_std += metrics_std['DISPONIBILIDAD'] * metrics_std['T_Planificado']
-                    g_perf_w_std += metrics_std['PERFORMANCE'] * metrics_std['T_Operativo']
+                    # EXCLUIR DOB-007 DEL ACUMULADO ESTÁNDAR
+                    if maq != 'DOB-007':
+                        g_plan_std += metrics_std['T_Planificado']; g_op_std += metrics_std['T_Operativo']
+                        g_buenas_std += metrics_std['Buenas']; g_totales_std += metrics_std['Totales']
+                        g_disp_w_std += metrics_std['DISPONIBILIDAD'] * metrics_std['T_Planificado']
+                        g_perf_w_std += metrics_std['PERFORMANCE'] * metrics_std['T_Operativo']
 
         g_disp = g_disp_w / g_plan if g_plan > 0 else 0
         g_perf = g_perf_w / g_op if g_op > 0 else 0
@@ -843,7 +847,10 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
             g_cal_s = (g_buenas_std / g_totales_std) if g_totales_std > 0 else 0 
             m_g_std = {'OEE': g_disp_s * g_perf_s * g_cal_s, 'DISPONIBILIDAD': g_disp_s, 'PERFORMANCE': g_perf_s, 'CALIDAD': g_cal_s}
 
-        print_pdf_metric_row(pdf, f"Total {g}", m_g, m_g_std)
+        # CAMBIO DE ETIQUETA PARA EL GRUPO DOBLADORA
+        titulo_grupo = f"Total {g} (excluye DOB-007)" if g == "DOBLADORA" else f"Total {g}"
+        
+        print_pdf_metric_row(pdf, titulo_grupo, m_g, m_g_std)
         for maq, metrics in maquinas_metricas.items(): print_pdf_metric_row(pdf, f"    > {maq}", metrics, maquinas_metricas_std.get(maq))
         pdf.ln(3)
 
