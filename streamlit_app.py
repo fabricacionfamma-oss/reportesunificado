@@ -507,17 +507,23 @@ def set_pdf_color_metric(pdf, val, metric_name, area_override=None):
 
 def print_pdf_metric_row(pdf, prefix, m, m_std=None):
     pdf.set_font("Arial", 'B', 10); pdf.set_text_color(0, 0, 0)
+    
+    oee = (m.get('OEE') or 0) * 100
+    disp = (m.get('DISPONIBILIDAD') or 0) * 100
+    perf = (m.get('PERFORMANCE') or 0) * 100
+    cal = (m.get('CALIDAD') or 0) * 100
+    
     pdf.write(7, clean_text(f"{prefix} | OEE: "))
-    set_pdf_color_metric(pdf, m.get('OEE', 0)*100, 'OEE'); pdf.write(7, f"{m.get('OEE', 0)*100:.1f}%")
+    set_pdf_color_metric(pdf, oee, 'OEE'); pdf.write(7, f"{oee:.1f}%")
     
     pdf.set_text_color(0, 0, 0); pdf.write(7, clean_text("  |  Disp: "))
-    set_pdf_color_metric(pdf, m.get('DISPONIBILIDAD', 0)*100, 'DISPONIBILIDAD'); pdf.write(7, f"{m.get('DISPONIBILIDAD', 0)*100:.1f}%")
+    set_pdf_color_metric(pdf, disp, 'DISPONIBILIDAD'); pdf.write(7, f"{disp:.1f}%")
     
     pdf.set_text_color(0, 0, 0); pdf.write(7, clean_text("  |  Perf: "))
-    set_pdf_color_metric(pdf, m.get('PERFORMANCE', 0)*100, 'PERFORMANCE'); pdf.write(7, f"{m.get('PERFORMANCE', 0)*100:.1f}%")
+    set_pdf_color_metric(pdf, perf, 'PERFORMANCE'); pdf.write(7, f"{perf:.1f}%")
     
     pdf.set_text_color(0, 0, 0); pdf.write(7, clean_text("  |  Cal: "))
-    set_pdf_color_metric(pdf, m.get('CALIDAD', 0)*100, 'CALIDAD'); pdf.write(7, f"{m.get('CALIDAD', 0)*100:.1f}%")
+    set_pdf_color_metric(pdf, cal, 'CALIDAD'); pdf.write(7, f"{cal:.1f}%")
     pdf.set_text_color(0, 0, 0); pdf.ln(7)
 
 def add_image_safe(pdf, img_path, w_mm, h_mm, center=True):
@@ -698,6 +704,25 @@ def get_dt_targets(mes, area, category):
 # ==========================================
 def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw, p_tipo, df_trend, df_metrics_pdf, df_horarios, df_metrics_std_pdf, df_piezas_excluidas, mes=None):
     
+    def obtener_metricas_maquina(maq_name, df_metrics_src):
+        maq_row = df_metrics_src[df_metrics_src['Máquina'] == maq_name]
+        if maq_row.empty: return None
+        r = maq_row.iloc[0]
+        
+        def safe_val(val):
+            return 0 if pd.isna(val) or val is None else val
+            
+        return {
+            'OEE': safe_val(r['OEE']), 
+            'DISPONIBILIDAD': safe_val(r['DISPONIBILIDAD']), 
+            'PERFORMANCE': safe_val(r['PERFORMANCE']), 
+            'CALIDAD': safe_val(r['CALIDAD']), 
+            'T_Planificado': (r['T_Operativo'] + r['T_Parada']) if pd.notna(r['T_Operativo']) else 0,
+            'T_Operativo': r['T_Operativo'] if pd.notna(r['T_Operativo']) else 0, 
+            'Buenas': r['Buenas'] if pd.notna(r['Buenas']) else 0, 
+            'Totales': (r['Buenas'] + r['Retrabajo'] + r['Observadas']) if pd.notna(r['Buenas']) else 0
+        }
+        
     if area_req == "ESTAMPADO":
         theme_color = (15, 76, 129); comp_color = (52, 152, 219)  
         chart_bars = ['#003366', '#3498DB', '#AED6F1']
@@ -739,18 +764,6 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
         pdf.add_page(); pdf.set_font("Arial", 'I', 12); pdf.set_text_color(100)
         pdf.cell(0, 10, f"No hay datos registrados para {area_req} en este periodo.", ln=True)
         return pdf.output(dest='S').encode('latin-1')
-
-    def obtener_metricas_maquina(maq_name, df_metrics_src):
-        maq_row = df_metrics_src[df_metrics_src['Máquina'] == maq_name]
-        if maq_row.empty: return None
-        r = maq_row.iloc[0]
-        return {
-            'OEE': r['OEE'], 'DISPONIBILIDAD': r['DISPONIBILIDAD'], 'PERFORMANCE': r['PERFORMANCE'], 'CALIDAD': r['CALIDAD'], 
-            'T_Planificado': (r['T_Operativo'] + r['T_Parada']) if pd.notna(r['T_Operativo']) else 0,
-            'T_Operativo': r['T_Operativo'] if pd.notna(r['T_Operativo']) else 0, 
-            'Buenas': r['Buenas'] if pd.notna(r['Buenas']) else 0, 
-            'Totales': (r['Buenas'] + r['Retrabajo'] + r['Observadas']) if pd.notna(r['Buenas']) else 0
-        }
 
     for g in grupos_area:
         maq_del_grupo = sorted(list(set(df_pdf[df_pdf['Grupo_Máquina'] == g]['Máquina'].tolist() + df_m_pdf[df_m_pdf['Grupo_Máquina'] == g]['Máquina'].tolist())))
