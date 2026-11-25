@@ -1364,30 +1364,40 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
             
             for _, r in df_ev.iterrows():
                 t = float(r['Tiempo (Min)'])
+                maq_ev = str(r.get('Máquina', '')).strip()
                 for op in str(r['Operador']).split('/'):
                     op = op.strip()
                     if op and op != '-':
-                        if op not in resumen_eventos: resumen_eventos[op] = {'tiempo': 0.0, 'cantidad': 0, 'fabrica': r.get('Fábrica', '-')}
+                        if op not in resumen_eventos: resumen_eventos[op] = {'tiempo': 0.0, 'cantidad': 0, 'fabrica': r.get('Fábrica', '-'), 'maquinas': set()}
                         resumen_eventos[op]['tiempo'] += t
                         resumen_eventos[op]['cantidad'] += 1
+                        if maq_ev and maq_ev.lower() not in ['nan', 'none', '']:
+                            resumen_eventos[op]['maquinas'].add(maq_ev)
 
         if resumen_eventos:
-            df_res = pd.DataFrame([{'Operador': k, 'Fábrica': v['fabrica'], 'Minutos': v['tiempo'], 'Cantidad': v['cantidad']} for k, v in resumen_eventos.items()]).sort_values('Minutos', ascending=False)
+            df_res = pd.DataFrame([{
+                'Operador': k,
+                'Fábrica': v['fabrica'],
+                'Máquina': ", ".join(sorted(list(v['maquinas']))) if v['maquinas'] else '-',
+                'Minutos': v['tiempo'],
+                'Cantidad': v['cantidad']
+            } for k, v in resumen_eventos.items()]).sort_values('Minutos', ascending=False)
             df_res['Promedio'] = df_res['Minutos'] / df_res['Cantidad']
             
             def dibujar_cabeza_t():
-                setup_table_header(pdf, theme_color); pdf.set_font("Arial", 'B', 9)
-                pdf.cell(50, 6, "Operador", 1, 0, 'C', True)
-                pdf.cell(35, 6, "Fabrica", 1, 0, 'C', True)
-                pdf.cell(35, 6, "Total Min", 1, 0, 'C', True)
-                pdf.cell(35, 6, "Cant. Veces", 1, 0, 'C', True)
-                pdf.cell(35, 6, "Promedio Min", 1, 1, 'C', True)
+                setup_table_header(pdf, theme_color); pdf.set_font("Arial", 'B', 8)
+                pdf.cell(44, 6, "Operador", 1, 0, 'C', True)
+                pdf.cell(30, 6, "Fabrica", 1, 0, 'C', True)
+                pdf.cell(44, 6, "Maquina", 1, 0, 'C', True)
+                pdf.cell(24, 6, "Total Min", 1, 0, 'C', True)
+                pdf.cell(24, 6, "Cant. Veces", 1, 0, 'C', True)
+                pdf.cell(24, 6, "Promedio Min", 1, 1, 'C', True)
 
             dibujar_cabeza_t()
-            setup_table_row(pdf); pdf.set_font("Arial", '', 9)
+            setup_table_row(pdf); pdf.set_font("Arial", '', 8)
             for _, r in df_res.iterrows():
                 if pdf.get_y() > 270: 
-                    pdf.add_page(); dibujar_cabeza_t(); setup_table_row(pdf); pdf.set_font("Arial", '', 9)
+                    pdf.add_page(); dibujar_cabeza_t(); setup_table_row(pdf); pdf.set_font("Arial", '', 8)
                 
                 is_over = False
                 if p_tipo == "Diario":
@@ -1396,25 +1406,26 @@ def crear_pdf(area_req, label_reporte, op_target_df, prod_target_df, df_pdf_raw,
                     if r['Promedio'] > limite_minutos: is_over = True
 
                 pdf.set_text_color(50, 50, 50)
-                pdf.cell(50, 5, " " + clean_text(r['Operador'])[:25], 'B')
-                pdf.cell(35, 5, " " + clean_text(str(r['Fábrica']))[:18], 'B')
+                pdf.cell(44, 5, " " + clean_text(r['Operador'])[:25], 'B')
+                pdf.cell(30, 5, " " + clean_text(str(r['Fábrica']))[:18], 'B')
+                pdf.cell(44, 5, " " + clean_text(str(r['Máquina']))[:27], 'B')
                 
                 if is_over:
                     pdf.set_text_color(220, 20, 20)
                 else:
                     pdf.set_text_color(50, 50, 50)
                 
-                pdf.cell(35, 5, f"{r['Minutos']:.1f}", 'B', 0, 'C')
+                pdf.cell(24, 5, f"{r['Minutos']:.1f}", 'B', 0, 'C')
                 
                 pdf.set_text_color(50, 50, 50)
-                pdf.cell(35, 5, str(int(r['Cantidad'])), 'B', 0, 'C')
+                pdf.cell(24, 5, str(int(r['Cantidad'])), 'B', 0, 'C')
                 
                 if is_over:
                     pdf.set_text_color(220, 20, 20)
                 else:
                     pdf.set_text_color(50, 50, 50)
                 
-                pdf.cell(35, 5, f"{r['Promedio']:.1f}", 'B', 1, 'C')
+                pdf.cell(24, 5, f"{r['Promedio']:.1f}", 'B', 1, 'C')
                 pdf.set_text_color(50, 50, 50) 
             pdf.ln(5)
         else:
