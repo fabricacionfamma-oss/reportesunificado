@@ -1445,7 +1445,8 @@ with contenedor_editor:
             df_metrics = df_metrics[~df_metrics['Máquina'].isin(maq_ocultas)]
             df_raw = df_raw[~df_raw['Máquina'].isin(maq_ocultas)]
             pdf_df_prod_target = pdf_df_prod_target[~pdf_df_prod_target['Máquina'].isin(maq_ocultas)]
-            df_trend = df_trend[~df_trend['Máquina'].isin(maq_ocultas)]
+            if df_trend is not None and not df_trend.empty and 'Máquina' in df_trend.columns:
+                df_trend = df_trend[~df_trend['Máquina'].isin(maq_ocultas)]
             if not df_horarios.empty: df_horarios = df_horarios[~df_horarios['Máquina'].isin(maq_ocultas)]
 
 # ==========================================
