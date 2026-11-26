@@ -2,8 +2,18 @@ import streamlit as st
 import pandas as pd
 import os
 import calendar
+from urllib.parse import quote_plus
 from fpdf import FPDF
 from datetime import timedelta
+
+# ==========================================
+# CREDENCIALES DE BASE DE DATOS
+# ==========================================
+DB_SERVER_FAMMA = "200.49.98.250:1443"
+DB_SERVER_FUMISCOR = "200.49.98.250:1433"
+DB_DATABASE = "wii_bi"
+DB_USERNAME = "usrWiidemBI"
+DB_PASSWORD = "W113735$$"
 
 # ==========================================
 # 0. MAPEOS Y GRUPOS UNIFICADOS (FUMISCOR + FAMMA)
@@ -103,8 +113,12 @@ def run_query_safe(conn, query):
 @st.cache_data(ttl=300)
 def fetch_data_performance(fecha_ini, fecha_fin):
     try:
-        conn_famma = st.connection("famma", type="sql")
-        conn_fumiscor = st.connection("fumiscor", type="sql")
+        pwd_safe = quote_plus(DB_PASSWORD)
+        url_famma = f"mssql+pymssql://{DB_USERNAME}:{pwd_safe}@{DB_SERVER_FAMMA}/{DB_DATABASE}"
+        url_fumiscor = f"mssql+pymssql://{DB_USERNAME}:{pwd_safe}@{DB_SERVER_FUMISCOR}/{DB_DATABASE}"
+
+        conn_famma = st.connection("famma", type="sql", url=url_famma)
+        conn_fumiscor = st.connection("fumiscor", type="sql", url=url_fumiscor)
 
         ini_str = fecha_ini.strftime('%Y-%m-%d')
         fin_str = fecha_fin.strftime('%Y-%m-%d')
