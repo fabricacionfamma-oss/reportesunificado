@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import calendar
+import math
 from urllib.parse import quote_plus
 from fpdf import FPDF
 from datetime import timedelta
@@ -144,7 +145,41 @@ def fetch_data_performance(fecha_ini, fecha_fin):
 
         df_perf = pd.concat([df_perf_fam, df_perf_fum], ignore_index=True)
 
-        # 2. Horarios (Inicio - Fin) y Operarios por máquina y fecha
+        # 2. Performance diaria por operario
+        q_op = f"""
+            SELECT op.Name as Operador,
+                   p.Date as Fecha,
+                   p.Performance,
+                   p.ProductiveTime
+            FROM OPER_D_01 p
+            JOIN OPERATOR op ON p.OperatorId = op.OperatorId
+            WHERE p.Date BETWEEN '{ini_str}' AND '{fin_str}'
+        """
+        df_op_fam = run_query_safe(conn_famma, q_op)
+        df_op_fum = run_query_safe(conn_fumiscor, q_op)
+
+        for df_o in [df_op_fam, df_op_fum]:
+            if not df_o.empty and 'Performance' in df_o.columns:
+                df_o['Performance'] = pd.to_numeric(df_o['Performance'], errors='coerce').fillna(0)
+                if df_o['Performance'].max() <= 1.5:
+                    df_o['Performance'] = df_o['Performance'] * 100.0
+
+        df_op_raw = pd.concat([df_op_fam, df_op_fum], ignore_index=True)
+        op_perf_map = {}
+
+        if not df_op_raw.empty:
+            df_op_raw['Fecha'] = pd.to_datetime(df_op_raw['Fecha']).dt.date
+            df_op_raw['ProductiveTime'] = pd.to_numeric(df_op_raw['ProductiveTime'], errors='coerce').fillna(0)
+            df_op_raw['Perf_Num'] = df_op_raw['Performance'] * df_op_raw['ProductiveTime']
+            df_op_agg = df_op_raw.groupby(['Operador', 'Fecha']).agg(
+                Perf_Num=('Perf_Num', 'sum'),
+                ProductiveTime=('ProductiveTime', 'sum')
+            ).reset_index()
+            df_op_agg['OP_PERF'] = df_op_agg['Perf_Num'] / df_op_agg['ProductiveTime'].replace(0, 1)
+            for _, r_op in df_op_agg.iterrows():
+                op_perf_map[(str(r_op['Operador']).strip(), r_op['Fecha'])] = float(r_op['OP_PERF'])
+
+        # 3. Horarios (Inicio - Fin) y Operarios por máquina y fecha
         q_ev = f"""
             SELECT c.Name as Máquina,
                    e.Date as Fecha,
@@ -164,18 +199,30 @@ def fetch_data_performance(fecha_ini, fecha_fin):
             df_ev['Inicio'] = pd.to_datetime(df_ev['Inicio'], errors='coerce')
             df_ev['Fin'] = pd.to_datetime(df_ev['Fin'], errors='coerce')
 
-            def limpiar_ops(series):
-                ops = []
-                for x in series.dropna().unique():
-                    s = str(x).strip()
-                    if s and 'usuario' not in s.lower() and 'admin' not in s.lower():
-                        ops.append(s)
-                return ", ".join(sorted(set(ops))) if ops else "-"
+            def limpiar_ops_con_perf(grp):
+                fecha_g = grp['Fecha'].iloc[0]
+                ops_unicos = sorted(set([
+                    str(x).strip() for x in grp['Operador'].dropna().unique()
+                    if str(x).strip() and 'usuario' not in str(x).lower() and 'admin' not in str(x).lower()
+                ]))
+                if not ops_unicos:
+                    return "-"
+                lista_fmt = []
+                for op_n in ops_unicos:
+                    p_val = op_perf_map.get((op_n, fecha_g), None)
+                    if p_val is not None:
+                        lista_fmt.append(f"{op_n} ({p_val:.1f}%)")
+                    else:
+                        lista_fmt.append(op_n)
+                return "\n".join(lista_fmt)
 
-            df_hor_op = df_ev.groupby(['Máquina', 'Fecha']).agg(
-                Min_Inicio=('Inicio', 'min'),
-                Max_Fin=('Fin', 'max'),
-                Operarios=('Operador', limpiar_ops)
+            df_hor_op = df_ev.groupby(['Máquina', 'Fecha']).apply(
+                lambda g: pd.Series({
+                    'Min_Inicio': g['Inicio'].min(),
+                    'Max_Fin': g['Fin'].max(),
+                    'Operarios': limpiar_ops_con_perf(g)
+                }),
+                include_groups=False
             ).reset_index()
 
             df_hor_op['Hora'] = df_hor_op.apply(
@@ -314,7 +361,7 @@ def generar_pdf_3_hojas(df_all, label_reporte):
         pdf.cell(w_fec, 6, "Fecha", 1, 0, 'C', True)
         pdf.cell(w_hor, 6, "Hora", 1, 0, 'C', True)
         pdf.cell(w_per, 6, "Perf.", 1, 0, 'C', True)
-        pdf.cell(w_ops, 6, "Operarios", 1, 1, 'C', True)
+        pdf.cell(w_ops, 6, "Operarios (Perf. Individual)", 1, 1, 'C', True)
 
     for area_name, theme_color in areas_config:
         pdf.area_actual = area_name
@@ -353,10 +400,14 @@ def generar_pdf_3_hojas(df_all, label_reporte):
 
             for _, row in df_g.iterrows():
                 ops_txt = clean_text(row['Operarios'])
-                # Calcular cuántas líneas ocupará el texto de operarios
                 pdf.set_font("Arial", '', 8)
-                lineas_ops = max(1, int((pdf.get_string_width(ops_txt) / (w_ops - 3)) + 1))
-                row_h = max(5.5, lineas_ops * 4.5)
+
+                # Calcular líneas exactas considerando saltos de línea y ancho
+                total_lineas = 0
+                for linea in ops_txt.split('\n'):
+                    w_str = pdf.get_string_width(linea)
+                    total_lineas += max(1, math.ceil(w_str / (w_ops - 3)))
+                row_h = max(5.5, total_lineas * 4.4 + 1.0)
 
                 if pdf.get_y() + row_h > 272:
                     pdf.add_page()
@@ -387,13 +438,13 @@ def generar_pdf_3_hojas(df_all, label_reporte):
                     pdf.set_text_color(220, 20, 20)
                 pdf.cell(w_per, row_h, f"{perf_val:.1f}%", 1, 0, 'C', True)
 
-                # Celda de Operarios con multi_cell para que no se corte
+                # Celda de Operarios con multi_cell
                 pdf.set_font("Arial", '', 8)
                 pdf.set_text_color(40, 40, 40)
                 x_ops = pdf.get_x()
                 pdf.rect(x_ops, y_start, w_ops, row_h, 'DF')
                 pdf.set_xy(x_ops + 1, y_start + 0.5)
-                pdf.multi_cell(w_ops - 2, 4.2, ops_txt, border=0, align='L')
+                pdf.multi_cell(w_ops - 2, 4.4, ops_txt, border=0, align='L')
 
                 pdf.set_xy(x_start, y_start + row_h)
                 fill_row = not fill_row
@@ -429,6 +480,7 @@ if not df_datos.empty:
                 st.info(f"No hay datos registrados para {area_nombre} en este período.")
             else:
                 df_tab['PERFORMANCE'] = df_tab['PERFORMANCE'].map(lambda x: f"{x:.1f}%")
+                df_tab['Operarios'] = df_tab['Operarios'].str.replace('\n', ' | ')
                 st.dataframe(df_tab, use_container_width=True, hide_index=True)
 else:
     st.warning("No se encontraron datos para el período seleccionado.")
