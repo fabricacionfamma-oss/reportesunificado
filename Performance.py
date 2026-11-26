@@ -199,12 +199,21 @@ def fetch_data_performance(fecha_ini, fecha_fin):
             df_ev['Inicio'] = pd.to_datetime(df_ev['Inicio'], errors='coerce')
             df_ev['Fin'] = pd.to_datetime(df_ev['Fin'], errors='coerce')
 
-            def limpiar_ops_con_perf(grp):
-                fecha_g = grp['Fecha'].iloc[0]
-                ops_unicos = sorted(set([
-                    str(x).strip() for x in grp['Operador'].dropna().unique()
+            def obtener_ops_unicos(series):
+                return sorted(set([
+                    str(x).strip() for x in series.dropna().unique()
                     if str(x).strip() and 'usuario' not in str(x).lower() and 'admin' not in str(x).lower()
                 ]))
+
+            df_hor_op = df_ev.groupby(['Máquina', 'Fecha']).agg(
+                Min_Inicio=('Inicio', 'min'),
+                Max_Fin=('Fin', 'max'),
+                Lista_Ops=('Operador', obtener_ops_unicos)
+            ).reset_index()
+
+            def formatear_ops_con_perf(row):
+                ops_unicos = row['Lista_Ops']
+                fecha_g = row['Fecha']
                 if not ops_unicos:
                     return "-"
                 lista_fmt = []
@@ -216,14 +225,7 @@ def fetch_data_performance(fecha_ini, fecha_fin):
                         lista_fmt.append(op_n)
                 return "\n".join(lista_fmt)
 
-            df_hor_op = df_ev.groupby(['Máquina', 'Fecha']).apply(
-                lambda g: pd.Series({
-                    'Min_Inicio': g['Inicio'].min(),
-                    'Max_Fin': g['Fin'].max(),
-                    'Operarios': limpiar_ops_con_perf(g)
-                }),
-                include_groups=False
-            ).reset_index()
+            df_hor_op['Operarios'] = df_hor_op.apply(formatear_ops_con_perf, axis=1)
 
             df_hor_op['Hora'] = df_hor_op.apply(
                 lambda r: f"{r['Min_Inicio'].strftime('%H:%M')} - {r['Max_Fin'].strftime('%H:%M')}"
